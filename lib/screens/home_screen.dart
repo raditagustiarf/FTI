@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_map/flutter_map.dart'; 
 import 'package:latlong2/latlong.dart' hide Path; 
-import 'package:geolocator/geolocator.dart'; // <-- Bantuan GPS untuk jarak
+import 'package:geolocator/geolocator.dart'; 
+
 import '../core/theme.dart';
 import '../providers/catalog_provider.dart';
-import 'search_screen.dart';
+import 'search_screen.dart'; 
 import 'chat_detail_screen.dart';
+import 'reviews_screen.dart'; 
 
 String getInitials(String name) {
   if (name.isEmpty) return '?';
@@ -27,18 +29,31 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool isMapView = true;
   String activeCategory = '📍 Terdekat'; 
-  
-  // Variabel untuk menyimpan lokasi GPS kita saat ini
   LatLng? _myLocation;
+  String _listSearchQuery = '';
+  
+  bool _isGettingLocation = false;
+  final MapController _mapController = MapController(); 
+
+  // ==========================================
+  // BARU: Mesin Pemantau Jarak Zoom Peta (Smart Zoom)
+  // ==========================================
+  final ValueNotifier<double> _zoomNotifier = ValueNotifier<double>(15.5);
 
   @override
   void initState() {
     super.initState();
-    _fetchMyLocation(); // Dapatkan lokasi kita saat aplikasi dibuka
+    _fetchMyLocation(); 
   }
 
-  // Fungsi mengambil koordinat GPS kita
+  @override
+  void dispose() {
+    _zoomNotifier.dispose(); // Cegah kebocoran memori
+    super.dispose();
+  }
+
   Future<void> _fetchMyLocation() async {
+    setState(() => _isGettingLocation = true);
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) return;
@@ -58,25 +73,29 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       debugPrint('Gagal mengambil lokasi pembeli: $e');
+    } finally {
+      if (mounted) setState(() => _isGettingLocation = false);
     }
   }
 
-  // Fungsi Ajaib: Menghitung & memformat jarak asli
   String _calculateDistance(double? lat, double? lng) {
     if (_myLocation == null || lat == null || lng == null) return '? km';
-    
-    // Hitung jarak dalam hitungan meter
-    final double distanceInMeters = const Distance().distance(
-      _myLocation!,
-      LatLng(lat, lng),
-    );
-
-    // Format tampilan agar rapi
+    final double distanceInMeters = const Distance().distance(_myLocation!, LatLng(lat, lng));
     if (distanceInMeters < 1000) {
-      return '${distanceInMeters.toInt()} m'; // Tampilkan meter jika di bawah 1km
+      return '${distanceInMeters.toInt()} m'; 
     } else {
-      return '${(distanceInMeters / 1000).toStringAsFixed(1)} km'; // Tampilkan desimal km jika jauh
+      return '${(distanceInMeters / 1000).toStringAsFixed(1)} km'; 
     }
+  }
+
+  void _flyToProductLocation(LatLng location) {
+    setState(() {
+      isMapView = true;
+    });
+    
+    Future.delayed(const Duration(milliseconds: 400), () {
+      _mapController.move(location, 18.0); 
+    });
   }
 
   @override
@@ -104,70 +123,124 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildMapView(List<Product> products) {
-    const defaultCenter = LatLng(-2.1292, 106.1106);
-    
-    LatLng mapCenter = defaultCenter;
-    for (var p in products) {
-      if (p.latitude != null && p.longitude != null) {
-        mapCenter = LatLng(p.latitude!, p.longitude!);
-        break; 
-      }
-    }
+    List<Product> filteredMapProducts = products.where((p) {
+      if (p.latitude == null || p.longitude == null) return false;
+      if (activeCategory == '📍 Terdekat') return true;
+      return p.category.toLowerCase() == activeCategory.toLowerCase();
+    }).toList();
 
-    final List<String> dummyRatings = ['4.9', '5.0', '4.7', '4.8', '5.0'];
+    const defaultCenter = LatLng(-2.1292, 106.1106);
+    LatLng mapCenter = defaultCenter;
+    for (var p in filteredMapProducts) {
+      mapCenter = LatLng(p.latitude!, p.longitude!);
+      break; 
+    }
 
     return Stack(
       key: const ValueKey('MapView'),
       children: [
         FlutterMap(
+          mapController: _mapController, 
           options: MapOptions(
             initialCenter: mapCenter,
             initialZoom: 15.5, 
+            maxZoom: 20.0,
+            // ==========================================
+            // BARU: Pantau pergerakan zoom secara realtime!
+            // ==========================================
+            onPositionChanged: (position, hasGesture) {
+              _zoomNotifier.value = position.zoom;
+            },
           ),
           children: [
             TileLayer(
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.tetanggamarket.app',
             ),
+            
+            // ==========================================
+            // SMART VISIBILITY MARKERS
+            // ==========================================
             MarkerLayer(
-              markers: products
-                  .where((p) => p.latitude != null && p.longitude != null)
-                  .toList()
-                  .asMap()
-                  .entries
-                  .map((entry) {
-                
+              markers: filteredMapProducts.asMap().entries.map((entry) {
                 final int index = entry.key;
                 final Product product = entry.value;
                 final coord = LatLng(product.latitude!, product.longitude!);
-                // Hitung jarak asli untuk dikirim ke BottomSheet profil toko
                 final realDistance = _calculateDistance(product.latitude, product.longitude);
+                final ratingText = product.sellerRating > 0 ? product.sellerRating.toStringAsFixed(1) : 'Baru';
 
                 return Marker(
                   point: coord,
                   width: 140, 
                   height: 70, 
                   alignment: Alignment.bottomCenter, 
-                  child: _StoreCategoryPin(
-                    product: product,
-                    allProducts: products,
-                    isVerified: index % 2 == 1,
-                    rating: dummyRatings[index % dummyRatings.length],
-                    realDistance: realDistance, // <-- Kirim jarak ke pin
+                  // ValueListenableBuilder agar UI berubah TANPA lag (sangat ringan)
+                  child: ValueListenableBuilder<double>(
+                    valueListenable: _zoomNotifier,
+                    builder: (context, currentZoom, child) {
+                      
+                      // LOGIKA: Jika dilihat dari jauh (Zoom < 14)
+                      if (currentZoom < 14.0) {
+                        return Center(
+                          child: Container(
+                            width: 14, height: 14,
+                            decoration: BoxDecoration(
+                              color: AppTheme.neonGreen,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.black, width: 2.5),
+                              boxShadow: [
+                                BoxShadow(color: AppTheme.neonGreen.withOpacity(0.5), blurRadius: 6)
+                              ]
+                            ),
+                          ),
+                        );
+                      } 
+                      // LOGIKA: Jika dilihat dari dekat (Zoom >= 14)
+                      else {
+                        return _StoreCategoryPin(
+                          product: product,
+                          allProducts: products,
+                          isVerified: index % 2 == 1,
+                          rating: ratingText, 
+                          realDistance: realDistance, 
+                          onViewMap: _flyToProductLocation,
+                        );
+                      }
+                    },
                   ),
                 );
               }).toList(),
             ),
           ],
         ),
-        SafeArea(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildSearchBar(floating: true),
-              Padding(padding: const EdgeInsets.only(bottom: 90), child: _buildToggleSwitch()),
-            ],
+        
+        Positioned(
+          top: MediaQuery.of(context).padding.top + 10,
+          left: 0, right: 0,
+          child: _buildMapSearchBar(),
+        ),
+
+        Positioned(
+          right: 20, bottom: 100,
+          child: FloatingActionButton(
+            heroTag: 'btn_my_location_home',
+            mini: true,
+            backgroundColor: const Color(0xFF151414),
+            onPressed: () async {
+              await _fetchMyLocation();
+              if (_myLocation != null) {
+                _mapController.move(_myLocation!, 16.5);
+              }
+            },
+            child: _isGettingLocation
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: AppTheme.neonGreen, strokeWidth: 2))
+              : const Icon(Icons.my_location, color: AppTheme.neonGreen, size: 20),
           ),
+        ),
+
+        Positioned(
+          left: 0, right: 0, bottom: 100, 
+          child: Center(child: _buildToggleSwitch()),
         ),
       ],
     );
@@ -183,7 +256,10 @@ class _HomeScreenState extends State<HomeScreen> {
             decoration: BoxDecoration(color: const Color(0xE5121111), border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.1)))),
             child: Column(
               children: [
-                _buildSearchBar(floating: false), const SizedBox(height: 16), _buildToggleSwitch(), const SizedBox(height: 16),
+                _buildListSearchBar(), 
+                const SizedBox(height: 16), 
+                _buildToggleSwitch(), 
+                const SizedBox(height: 16),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
@@ -199,18 +275,19 @@ class _HomeScreenState extends State<HomeScreen> {
           Expanded(
             child: Builder(
               builder: (context) {
-                // Filter kategori
                 List<Product> filteredProducts = products.where((p) {
-                  if (activeCategory == '📍 Terdekat') return true;
-                  return p.category.toLowerCase() == activeCategory.toLowerCase();
+                  final matchCategory = activeCategory == '📍 Terdekat' || p.category.toLowerCase() == activeCategory.toLowerCase();
+                  final matchSearch = _listSearchQuery.isEmpty || 
+                                      p.title.toLowerCase().contains(_listSearchQuery.toLowerCase()) ||
+                                      p.sellerName.toLowerCase().contains(_listSearchQuery.toLowerCase()) ||
+                                      p.category.toLowerCase().contains(_listSearchQuery.toLowerCase());
+                  return matchCategory && matchSearch;
                 }).toList();
 
-                // FITUR OTOMATIS: Urutkan produk dari yang paling dekat!
                 if (activeCategory == '📍 Terdekat' && _myLocation != null) {
                   filteredProducts.sort((a, b) {
-                    if (a.latitude == null || a.longitude == null) return 1; // Taruh bawah jika tidak ada lokasi
+                    if (a.latitude == null || a.longitude == null) return 1; 
                     if (b.latitude == null || b.longitude == null) return -1;
-                    
                     final distA = const Distance().distance(_myLocation!, LatLng(a.latitude!, a.longitude!));
                     final distB = const Distance().distance(_myLocation!, LatLng(b.latitude!, b.longitude!));
                     return distA.compareTo(distB);
@@ -218,24 +295,28 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
 
                 if (filteredProducts.isEmpty) {
-                  return const Center(child: Text('Belum ada produk di kategori ini', style: TextStyle(color: Colors.white54)));
+                  return const Center(child: Text('Tidak ada produk yang cocok.', style: TextStyle(color: Colors.white54)));
                 }
 
-                return ListView.builder(
+                return GridView.builder(
                   padding: const EdgeInsets.only(left: 20, right: 20, top: 16, bottom: 100),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2, 
+                    mainAxisSpacing: 16,
+                    crossAxisSpacing: 16,
+                    childAspectRatio: 0.72, 
+                  ),
                   itemCount: filteredProducts.length,
                   itemBuilder: (context, index) {
                     final prod = filteredProducts[index];
-                    // Kirim jarak asli ke kartu produk
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: _buildProductCard(
-                        product: prod,
-                        distance: _calculateDistance(prod.latitude, prod.longitude), // <-- Jarak Asli!
-                        sellerInitials: getInitials(prod.sellerName),
-                        sellerName: prod.sellerName, 
-                        rating: '4.9',
-                      ),
+                    final ratingText = prod.sellerRating > 0 ? prod.sellerRating.toStringAsFixed(1) : 'Baru';
+
+                    return _buildGridProductCard(
+                      product: prod,
+                      distance: _calculateDistance(prod.latitude, prod.longitude), 
+                      sellerInitials: getInitials(prod.sellerName),
+                      sellerName: prod.sellerName, 
+                      rating: ratingText,
                     );
                   },
                 );
@@ -247,10 +328,10 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildSearchBar({required bool floating}) {
+  Widget _buildMapSearchBar() {
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
+      onTap: () async {
+        final result = await Navigator.push(
           context,
           PageRouteBuilder(
             transitionDuration: const Duration(milliseconds: 500), reverseTransitionDuration: const Duration(milliseconds: 400),
@@ -260,29 +341,66 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
         );
+
+        if (result != null && result is LatLng) {
+          _mapController.move(result, 16.0); 
+        }
       },
       child: Hero(
         tag: 'search_bar_hero',
         child: Material(
           type: MaterialType.transparency,
           child: Container(
-            margin: floating ? const EdgeInsets.symmetric(horizontal: 20, vertical: 10) : null,
+            margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             height: 48, padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              color: floating ? const Color(0xB2111010) : Colors.white.withOpacity(0.045),
-              borderRadius: BorderRadius.circular(floating ? 26 : 16),
+              color: const Color(0xB2111010),
+              borderRadius: BorderRadius.circular(26),
               border: Border.all(color: Colors.white.withOpacity(0.14)),
-              boxShadow: floating ? const [BoxShadow(color: Colors.black45, blurRadius: 30, offset: Offset(0, 10))] : null,
+              boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 30, offset: Offset(0, 10))],
             ),
-            child: Row(
+            child: const Row(
               children: [
-                Icon(Icons.location_on, color: floating ? AppTheme.textGray : Colors.white54, size: 18), const SizedBox(width: 12),
-                Expanded(child: Text(floating ? 'Jl. Batu Akik...' : 'Cari di sekitarmu...', style: TextStyle(color: floating ? AppTheme.textWhite : Colors.white54, fontWeight: floating ? FontWeight.bold : FontWeight.normal, fontSize: floating ? 14 : 12))),
-                if (floating) const Icon(Icons.keyboard_arrow_down, color: AppTheme.textGray),
+                Icon(Icons.location_on, color: AppTheme.textGray, size: 18), SizedBox(width: 12),
+                Expanded(child: Text('Cari jalan atau area peta...', style: TextStyle(color: AppTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 14))),
+                Icon(Icons.keyboard_arrow_down, color: AppTheme.textGray),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildListSearchBar() {
+    return Container(
+      height: 48, 
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.045),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.14)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.search, color: Colors.white54, size: 18), 
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(
+              onChanged: (value) {
+                setState(() {
+                  _listSearchQuery = value;
+                });
+              },
+              style: const TextStyle(color: AppTheme.textWhite, fontSize: 13),
+              decoration: const InputDecoration(
+                hintText: 'Cari Nasi Goreng, Jasa...', 
+                hintStyle: TextStyle(color: Colors.white38, fontSize: 13),
+                border: InputBorder.none,
+              ),
+            )
+          ),
+        ],
       ),
     );
   }
@@ -312,25 +430,81 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildProductCard({required Product product, required String distance, required String sellerInitials, required String sellerName, required String rating}) {
+  Widget _buildGridProductCard({required Product product, required String distance, required String sellerInitials, required String sellerName, required String rating}) {
     return GestureDetector(
-      onTap: () {
-        showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (context) => ProductDetailBottomSheet(product: product));
+      onTap: () async {
+        final result = await showModalBottomSheet(
+          context: context, isScrollControlled: true, backgroundColor: Colors.transparent, 
+          builder: (context) => ProductDetailBottomSheet(product: product)
+        );
+        
+        if (result != null && result is LatLng) {
+          _flyToProductLocation(result);
+        }
       },
       child: Container(
-        decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.09))),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A), 
+          borderRadius: BorderRadius.circular(16), 
+          border: Border.all(color: Colors.white.withOpacity(0.09))
+        ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(height: 108, width: double.infinity, decoration: BoxDecoration(borderRadius: const BorderRadius.vertical(top: Radius.circular(15)), gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: product.gradientColors)), child: Align(alignment: Alignment.bottomLeft, child: Container(margin: const EdgeInsets.all(8), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.black.withOpacity(0.3), borderRadius: BorderRadius.circular(6)), child: Text(product.category, style: const TextStyle(color: Colors.white70, fontSize: 9))))),
+            Expanded(
+              child: Container(
+                width: double.infinity, 
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(15)), 
+                  image: product.imageUrl != null ? DecorationImage(image: NetworkImage(product.imageUrl!), fit: BoxFit.cover) : null,
+                  gradient: product.imageUrl == null ? LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: product.gradientColors) : null,
+                ), 
+                child: Align(
+                  alignment: Alignment.bottomLeft, 
+                  child: Container(
+                    margin: const EdgeInsets.all(6), 
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4), 
+                    decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(6)), 
+                    child: Text(product.category, style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold))
+                  )
+                )
+              )
+            ),
             Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(product.title, style: const TextStyle(color: AppTheme.textWhite, fontSize: 13, fontWeight: FontWeight.bold)), const SizedBox(height: 4), Text(product.price, style: const TextStyle(color: AppTheme.neonGreen, fontSize: 13, fontWeight: FontWeight.bold)), const SizedBox(height: 8),
-                  // TAMPILAN JARAK ASLI
-                  Row(children: [const Icon(Icons.location_on, color: AppTheme.textGray, size: 12), const SizedBox(width: 4), Text(distance, style: const TextStyle(color: AppTheme.textGray, fontSize: 10))]), const Divider(color: Colors.white12, height: 24),
-                  Row(children: [CircleAvatar(radius: 12, backgroundColor: Colors.white.withOpacity(0.1), child: Text(sellerInitials, style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold))), const SizedBox(width: 8), Text(sellerName, style: const TextStyle(color: Colors.white70, fontSize: 11)), const Spacer(), const Icon(Icons.star, color: Color(0xFFFFD700), size: 12), const SizedBox(width: 4), Text(rating, style: const TextStyle(color: Color(0xFFFFD700), fontSize: 11))]),
+                  Text(product.title, style: const TextStyle(color: AppTheme.textWhite, fontSize: 12, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis), 
+                  const SizedBox(height: 4), 
+                  Text(product.price, style: const TextStyle(color: AppTheme.neonGreen, fontSize: 11, fontWeight: FontWeight.bold)), 
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on, color: AppTheme.textGray, size: 10), 
+                      const SizedBox(width: 4), 
+                      Text(distance, style: const TextStyle(color: AppTheme.textGray, fontSize: 9))
+                    ]
+                  ), 
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Container(
+                        width: 16, height: 16,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                          image: product.sellerAvatarUrl != null ? DecorationImage(image: NetworkImage(product.sellerAvatarUrl!), fit: BoxFit.cover) : null,
+                        ),
+                        child: product.sellerAvatarUrl == null ? Center(child: Text(sellerInitials, style: const TextStyle(color: Colors.white, fontSize: 6, fontWeight: FontWeight.bold))) : null,
+                      ),
+                      const SizedBox(width: 6), 
+                      Expanded(child: Text(sellerName, style: const TextStyle(color: Colors.white70, fontSize: 9), maxLines: 1, overflow: TextOverflow.ellipsis)), 
+                      const Icon(Icons.star, color: Color(0xFFFFD700), size: 10), 
+                      const SizedBox(width: 2), 
+                      Text(rating, style: const TextStyle(color: Color(0xFFFFD700), fontSize: 9))
+                    ]
+                  ),
                 ],
               ),
             ),
@@ -346,9 +520,14 @@ class _StoreCategoryPin extends StatelessWidget {
   final List<Product> allProducts; 
   final bool isVerified;
   final String rating;
-  final String realDistance; // <-- Tambahan variabel jarak asli
+  final String realDistance; 
+  final Function(LatLng) onViewMap; 
   
-  const _StoreCategoryPin({required this.product, required this.allProducts, this.isVerified = false, required this.rating, required this.realDistance});
+  const _StoreCategoryPin({
+    required this.product, required this.allProducts, 
+    this.isVerified = false, required this.rating, required this.realDistance,
+    required this.onViewMap,
+  });
 
   IconData _getCategoryIcon(String category) {
     switch (category.toLowerCase()) {
@@ -367,9 +546,16 @@ class _StoreCategoryPin extends StatelessWidget {
     final bgColor = const Color(0xFF151414); 
 
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
         final sellerProducts = allProducts.where((p) => p.sellerId == product.sellerId).toList();
-        showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (context) => StoreBottomSheet(storeProduct: product, products: sellerProducts, distance: realDistance)); // Kirim ke BottomSheet
+        final result = await showModalBottomSheet(
+          context: context, isScrollControlled: true, backgroundColor: Colors.transparent, 
+          builder: (context) => StoreBottomSheet(storeProduct: product, products: sellerProducts, distance: realDistance)
+        );
+        
+        if (result != null && result is LatLng) {
+          onViewMap(result);
+        }
       },
       child: Column(
         mainAxisSize: MainAxisSize.min, 
@@ -415,12 +601,14 @@ class _PinTailPainter extends CustomPainter {
 class StoreBottomSheet extends StatelessWidget {
   final Product storeProduct; 
   final List<Product> products; 
-  final String distance; // <-- Terima jarak asli
+  final String distance; 
 
   const StoreBottomSheet({super.key, required this.storeProduct, required this.products, required this.distance});
 
   @override
   Widget build(BuildContext context) {
+    final ratingText = storeProduct.sellerRating > 0 ? storeProduct.sellerRating.toStringAsFixed(1) : 'Baru';
+
     return Container(
       height: MediaQuery.of(context).size.height * 0.75, padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
       decoration: const BoxDecoration(color: Color(0xFF151414), borderRadius: BorderRadius.vertical(top: Radius.circular(32)), border: Border(top: BorderSide(color: Colors.white12))),
@@ -430,10 +618,43 @@ class StoreBottomSheet extends StatelessWidget {
           Center(child: Container(width: 44, height: 4, decoration: BoxDecoration(color: Colors.white30, borderRadius: BorderRadius.circular(10)))), const SizedBox(height: 20),
           Row(
             children: [
-              Container(width: 44, height: 44, decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [Color(0xFFF3BD9D), Color(0xFF8D503A)])), child: Center(child: Text(getInitials(storeProduct.sellerName), style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)))), const SizedBox(width: 12),
-              // TAMPILAN JARAK ASLI DI PROFIL TOKO
+              Container(
+                width: 44, height: 44, 
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle, 
+                  image: storeProduct.sellerAvatarUrl != null ? DecorationImage(image: NetworkImage(storeProduct.sellerAvatarUrl!), fit: BoxFit.cover) : null,
+                  gradient: storeProduct.sellerAvatarUrl == null ? const LinearGradient(colors: [Color(0xFFF3BD9D), Color(0xFF8D503A)]) : null
+                ), 
+                child: storeProduct.sellerAvatarUrl == null ? Center(child: Text(getInitials(storeProduct.sellerName), style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold))) : null,
+              ), 
+              const SizedBox(width: 12),
+              
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Text(storeProduct.sellerName, style: const TextStyle(color: AppTheme.textWhite, fontSize: 16, fontWeight: FontWeight.bold)), const SizedBox(width: 6), const Icon(Icons.verified, color: Color(0xFFFFD700), size: 14)]), const SizedBox(height: 2), Text('$distance dari lokasimu', style: const TextStyle(color: AppTheme.textGray, fontSize: 11))])),
-              const Icon(Icons.star, color: AppTheme.neonGreen, size: 14), const SizedBox(width: 4), const Text('5.0', style: TextStyle(color: AppTheme.neonGreen, fontWeight: FontWeight.bold)),
+              
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => ReviewsScreen(
+                      sellerId: storeProduct.sellerId,
+                      sellerName: storeProduct.sellerName,
+                      currentRating: storeProduct.sellerRating,
+                      reviewCount: storeProduct.sellerReviewCount,
+                    )),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withOpacity(0.1))),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.star, color: AppTheme.neonGreen, size: 14), const SizedBox(width: 4), 
+                      Text(ratingText, style: const TextStyle(color: AppTheme.neonGreen, fontWeight: FontWeight.bold, fontSize: 12)),
+                      const SizedBox(width: 4), const Icon(Icons.chevron_right, color: AppTheme.textGray, size: 14),
+                    ]
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 24), const Text('KATALOG HARI INI', style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5)), const SizedBox(height: 12),
@@ -441,7 +662,9 @@ class StoreBottomSheet extends StatelessWidget {
             child: GridView.builder(
               itemCount: products.length,
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 16, crossAxisSpacing: 16, childAspectRatio: 0.85),
-              itemBuilder: (context, index) { return _buildGridItem(context, products[index]); },
+              itemBuilder: (context, index) { 
+                return _buildGridItem(context, products[index]); 
+              },
             ),
           ),
         ],
@@ -451,15 +674,28 @@ class StoreBottomSheet extends StatelessWidget {
 
   Widget _buildGridItem(BuildContext context, Product product) {
     return GestureDetector(
-      onTap: () {
-        showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (context) => ProductDetailBottomSheet(product: product));
+      onTap: () async {
+        final result = await showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (context) => ProductDetailBottomSheet(product: product));
+        if (result != null && result is LatLng) {
+          Navigator.pop(context, result);
+        }
       },
       child: Container(
         decoration: BoxDecoration(color: const Color(0xFF212121), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white12)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: Container(width: double.infinity, decoration: BoxDecoration(borderRadius: const BorderRadius.vertical(top: Radius.circular(15)), gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: product.gradientColors)), child: Center(child: Container(width: 40, height: 40, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.1), boxShadow: [BoxShadow(color: Colors.white.withOpacity(0.2), blurRadius: 20)]))))),
+            Expanded(
+              child: Container(
+                width: double.infinity, 
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(15)), 
+                  image: product.imageUrl != null ? DecorationImage(image: NetworkImage(product.imageUrl!), fit: BoxFit.cover) : null,
+                  gradient: product.imageUrl == null ? LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: product.gradientColors) : null,
+                ), 
+                child: product.imageUrl == null ? Center(child: Container(width: 40, height: 40, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.1), boxShadow: [BoxShadow(color: Colors.white.withOpacity(0.2), blurRadius: 20)]))) : null,
+              )
+            ),
             Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(product.title, style: const TextStyle(color: AppTheme.textWhite, fontSize: 12, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis), const SizedBox(height: 4), Text(product.price, style: const TextStyle(color: AppTheme.neonGreen, fontSize: 11, fontWeight: FontWeight.bold))])),
           ],
         ),
@@ -474,12 +710,47 @@ class ProductDetailBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ratingText = product.sellerRating > 0 ? product.sellerRating.toStringAsFixed(1) : 'Baru';
+
     return Container(
       height: MediaQuery.of(context).size.height * 0.90, decoration: const BoxDecoration(color: AppTheme.darkBackground, borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(height: 250, width: double.infinity, decoration: BoxDecoration(borderRadius: const BorderRadius.vertical(top: Radius.circular(30)), gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: product.gradientColors)), child: Stack(children: [Positioned(top: 20, left: 20, child: GestureDetector(onTap: () => Navigator.pop(context), child: Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white24)), child: const Text('← Kembali', style: TextStyle(color: Colors.white, fontSize: 12)))))])),
+          Container(
+            height: 250, width: double.infinity, 
+            decoration: BoxDecoration(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(30)), 
+              image: product.imageUrl != null ? DecorationImage(image: NetworkImage(product.imageUrl!), fit: BoxFit.cover) : null,
+              gradient: product.imageUrl == null ? LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: product.gradientColors) : null,
+            ), 
+            child: Stack(
+              children: [
+                if (product.imageUrl != null)
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                        colors: [Colors.black.withOpacity(0.6), Colors.transparent],
+                        stops: const [0.0, 0.4],
+                      ),
+                    ),
+                  ),
+                Positioned(
+                  top: 20, left: 20, 
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context), 
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), 
+                      decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white24)), 
+                      child: const Text('← Kembali', style: TextStyle(color: Colors.white, fontSize: 12))
+                    )
+                  )
+                )
+              ]
+            )
+          ),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(24),
@@ -490,7 +761,44 @@ class ProductDetailBottomSheet extends StatelessWidget {
                   Text(product.title, style: const TextStyle(color: AppTheme.textWhite, fontSize: 28, fontWeight: FontWeight.bold, height: 1.2, letterSpacing: -1.0)), const SizedBox(height: 12),
                   Text(product.price, style: const TextStyle(color: AppTheme.neonGreen, fontSize: 20, fontWeight: FontWeight.bold)), const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Divider(color: Colors.white12)),
                   const Text('Dibuat segar setiap hari dengan bahan-bahan pilihan terbaik dari tetangga sekitar, disajikan khusus untuk Anda.', style: TextStyle(color: AppTheme.textGray, fontSize: 13, height: 1.6)), const SizedBox(height: 20),
-                  Row(children: [Container(width: 32, height: 32, decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(16)), child: Center(child: Text(getInitials(product.sellerName), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)))), const SizedBox(width: 12), const Text('Oleh ', style: TextStyle(color: Colors.white60, fontSize: 12)), Text(product.sellerName, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)), const Spacer(), const Icon(Icons.star, color: AppTheme.neonGreen, size: 14), const SizedBox(width: 4), const Text('5.0', style: TextStyle(color: AppTheme.neonGreen, fontSize: 12))]),
+                  Row(children: [
+                    Container(
+                      width: 32, height: 32, 
+                      decoration: BoxDecoration(
+                        color: Colors.white12, shape: BoxShape.circle,
+                        image: product.sellerAvatarUrl != null ? DecorationImage(image: NetworkImage(product.sellerAvatarUrl!), fit: BoxFit.cover) : null,
+                      ), 
+                      child: product.sellerAvatarUrl == null ? Center(child: Text(getInitials(product.sellerName), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold))) : null,
+                    ), 
+                    const SizedBox(width: 12), 
+                    const Text('Oleh ', style: TextStyle(color: Colors.white60, fontSize: 12)), 
+                    Text(product.sellerName, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)), 
+                    const Spacer(), 
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => ReviewsScreen(
+                            sellerId: product.sellerId,
+                            sellerName: product.sellerName,
+                            currentRating: product.sellerRating,
+                            reviewCount: product.sellerReviewCount,
+                          )),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withOpacity(0.1))),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.star, color: AppTheme.neonGreen, size: 14), const SizedBox(width: 4), 
+                            Text(ratingText, style: const TextStyle(color: AppTheme.neonGreen, fontWeight: FontWeight.bold, fontSize: 12)),
+                            const SizedBox(width: 4), const Icon(Icons.chevron_right, color: AppTheme.textGray, size: 14),
+                          ]
+                        ),
+                      ),
+                    ),
+                  ]),
                 ],
               ),
             ),
@@ -499,7 +807,18 @@ class ProductDetailBottomSheet extends StatelessWidget {
             padding: const EdgeInsets.all(20), decoration: const BoxDecoration(color: Color(0xFF151414), border: Border(top: BorderSide(color: Colors.white12))),
             child: Column(
               children: [
-                OutlinedButton(onPressed: () => Navigator.pop(context), style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 50), side: BorderSide(color: AppTheme.neonGreen.withOpacity(0.5)), padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text('📍 Lihat Lokasi di Peta', style: TextStyle(color: AppTheme.neonGreen, fontWeight: FontWeight.bold))), const SizedBox(height: 12),
+                OutlinedButton(
+                  onPressed: () {
+                    if (product.latitude != null && product.longitude != null) {
+                      Navigator.pop(context, LatLng(product.latitude!, product.longitude!));
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lokasi produk ini belum diatur penjual.'), backgroundColor: Colors.orangeAccent));
+                    }
+                  }, 
+                  style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 50), side: BorderSide(color: AppTheme.neonGreen.withOpacity(0.5)), padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), 
+                  child: const Text('📍 Lihat Lokasi di Peta', style: TextStyle(color: AppTheme.neonGreen, fontWeight: FontWeight.bold))
+                ), 
+                const SizedBox(height: 12),
                 ElevatedButton(
                   onPressed: () {
                     final navigator = Navigator.of(context, rootNavigator: true);

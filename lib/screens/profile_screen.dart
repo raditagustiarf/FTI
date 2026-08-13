@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'; 
+
 import '../core/theme.dart';
+import '../providers/notification_provider.dart'; // <-- Bantuan dari Provider
 import 'manage_catalog_screen.dart';
 import 'location_settings_screen.dart';
 import 'account_settings_screen.dart';
@@ -16,10 +19,10 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final _supabase = Supabase.instance.client;
-  
   String _userName = 'Memuat...';
   String _userInitials = '...';
   String _userEmail = '';
+  String? _avatarUrl; 
 
   @override
   void initState() {
@@ -36,19 +39,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           setState(() => _userEmail = user.email ?? '');
         }
 
-        // Ambil nama dari tabel 'profiles'
         final response = await _supabase
             .from('profiles')
-            .select('full_name')
+            .select('full_name, avatar_url') 
             .eq('id', user.id)
             .maybeSingle(); 
 
         if (mounted) {
           setState(() {
-            // PERBAIKAN DI SINI: Menggunakan response?['full_name']
             _userName = response?['full_name'] ?? 'Pengguna';
+            _avatarUrl = response?['avatar_url']; 
             
-            // Membuat inisial nama
             _userInitials = _userName.isNotEmpty
                 ? _userName.substring(0, _userName.length >= 2 ? 2 : 1).toUpperCase()
                 : '?';
@@ -66,7 +67,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // FUNGSI LOGOUT
   Future<void> _logout() async {
     showDialog(
       context: context,
@@ -75,7 +75,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: CircularProgressIndicator(color: AppTheme.neonGreen),
       ),
     );
-
     try {
       await _supabase.auth.signOut();
       
@@ -114,24 +113,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Container(
                           width: 52,
                           height: 52,
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [Color(0xFFF1B18F), Color(0xFF945B44)],
-                            ),
+                            color: Colors.white12,
+                            image: _avatarUrl != null 
+                                ? DecorationImage(image: NetworkImage(_avatarUrl!), fit: BoxFit.cover)
+                                : null,
+                            gradient: _avatarUrl == null 
+                                ? const LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [Color(0xFFF1B18F), Color(0xFF945B44)],
+                                  )
+                                : null,
                           ),
-                          child: Center(
-                            child: Text(
-                              _userInitials, 
-                              style: const TextStyle(
-                                color: Colors.black,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
+                          child: _avatarUrl == null
+                            ? Center(
+                                child: Text(
+                                  _userInitials,
+                                  style: const TextStyle(
+                                    color: Colors.black,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              )
+                            : null, 
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -158,6 +165,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ],
                           ),
                         ),
+                        
+                        // IKON LONCENG NOTIFIKASI BESERTA BADGE MERAH
                         GestureDetector(
                           onTap: () {
                             Navigator.push(
@@ -165,43 +174,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               MaterialPageRoute(builder: (context) => const NotificationsScreen()),
                             );
                           },
-                          child: Stack(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white.withOpacity(0.12),
+                          child: Consumer<NotificationProvider>(
+                            builder: (context, notifProvider, child) {
+                              return Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.white.withOpacity(0.12)),
+                                    ),
+                                    child: const Icon(Icons.notifications_outlined, color: AppTheme.textWhite, size: 18),
                                   ),
-                                ),
-                                child: const Icon(
-                                  Icons.notifications_outlined, 
-                                  color: AppTheme.textWhite,
-                                  size: 18,
-                                ),
-                              ),
-                              Positioned(
-                                right: 6,
-                                top: 6,
-                                child: Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    color: Colors.redAccent,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: AppTheme.darkBackground, width: 1.5),
-                                  ),
-                                ),
-                              ),
-                            ],
+                                  if (notifProvider.unreadCount > 0)
+                                    Positioned(
+                                      right: -4,
+                                      top: -4,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(5),
+                                        decoration: BoxDecoration(
+                                          color: Colors.redAccent,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: AppTheme.darkBackground, width: 2),
+                                        ),
+                                        child: Text(
+                                          notifProvider.unreadCount.toString(),
+                                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              );
+                            }
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 40),
-
-                    // 2. JUDUL DASHBOARD
+                    
                     const Text(
                       'DASHBOARD PENJUAL',
                       style: TextStyle(
@@ -223,8 +234,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-
-                    // 3. DAFTAR MENU
+                    
                     _buildMenuCard(
                       emoji: '🛍️',
                       title: 'Kelola Katalog',
@@ -253,21 +263,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       emoji: '⚙️',
                       title: 'Pengaturan Akun',
                       subtitle: 'Profil dan preferensi',
-                      // PERUBAHAN DI SINI:
                       onTap: () async {
-                        // Tunggu sampai user selesai buka pengaturan akun
                         await Navigator.push(
                           context, 
                           MaterialPageRoute(builder: (context) => const AccountSettingsScreen())
                         );
-                        // JIKA SUDAH KEMBALI, REFRESH PROFIL!
-                        _fetchProfileData();
+                        _fetchProfileData(); // Refresh jika foto diganti
                       },
                     ),
                     
                     const SizedBox(height: 24),
-
-                    // 4. TOMBOL LOGOUT BARU
                     ElevatedButton(
                       onPressed: _logout,
                       style: ElevatedButton.styleFrom(
@@ -300,7 +305,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // REUSABLE WIDGET: Kartu Menu
   Widget _buildMenuCard({
     required String emoji, 
     required String title, 

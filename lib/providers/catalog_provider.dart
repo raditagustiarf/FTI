@@ -20,25 +20,37 @@ class Product {
   final String id;
   final String sellerId;
   final String sellerName; 
+  // ==========================================
+  // BARU: Penampung Foto Profil Penjual
+  // ==========================================
+  final String? sellerAvatarUrl; 
+  
   final String title;
   final String price;
   final String category;
   final List<Color> gradientColors; 
   final double? latitude;  
   final double? longitude; 
-  final bool isStoreVisible; // <-- BARU: Penyimpan status visibilitas
+  final bool isStoreVisible; 
+  final String? imageUrl; 
+  final double sellerRating;
+  final int sellerReviewCount;
 
   Product({
     required this.id,
     required this.sellerId,
     required this.sellerName, 
+    this.sellerAvatarUrl, // <-- Tambahkan ke constructor
     required this.title,
     required this.price,
     required this.category,
     required this.gradientColors,
     this.latitude,
     this.longitude,
-    this.isStoreVisible = true, // Default toko buka
+    this.isStoreVisible = true, 
+    this.imageUrl,
+    this.sellerRating = 0.0,
+    this.sellerReviewCount = 0,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -50,10 +62,16 @@ class Product {
       id: json['id'].toString(),
       sellerId: json['seller_id'].toString(),
       sellerName: profile != null ? profile['full_name'] ?? 'Penjual' : 'Penjual',
+      
+      // Menarik data avatar penjual dari database
+      sellerAvatarUrl: profile != null ? profile['avatar_url'] : null,
+
       latitude: profile != null ? profile['latitude']?.toDouble() : null,
       longitude: profile != null ? profile['longitude']?.toDouble() : null,
-      // Tarik status dari database
       isStoreVisible: profile != null ? (profile['is_store_visible'] ?? true) : true,
+      imageUrl: json['image_url'], 
+      sellerRating: profile != null ? (profile['rating'] ?? 0.0).toDouble() : 0.0,
+      sellerReviewCount: profile != null ? (profile['review_count'] ?? 0).toInt() : 0,
       title: json['title'] ?? 'Tanpa Nama',
       price: _formatRupiah(json['price'] as int),
       category: json['category'] ?? 'Lainnya',
@@ -68,10 +86,8 @@ class CatalogProvider with ChangeNotifier {
   List<Product> _products = [];
   bool _isLoading = false;
 
-  // PERBAIKAN: Hanya kirimkan produk yang status isStoreVisible-nya TRUE (Toko Buka) ke Peta & Daftar!
   List<Product> get products => _products.where((p) => p.isStoreVisible).toList();
   
-  // Produk milik sendiri tetap terlihat semua meskipun toko sedang "ditutup"
   List<Product> get myProducts {
     final user = _supabase.auth.currentUser;
     if (user == null) return [];
@@ -89,10 +105,10 @@ class CatalogProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      // PERBAIKAN: Tambahkan pengambilan is_store_visible
       final response = await _supabase
           .from('products')
-          .select('*, profiles!fk_seller_profile(full_name, latitude, longitude, is_store_visible)') 
+          // PERBAIKAN: Tarik juga kolom 'avatar_url'
+          .select('*, profiles!fk_seller_profile(full_name, avatar_url, latitude, longitude, is_store_visible, rating, review_count)') 
           .order('created_at', ascending: false);
           
       _products = (response as List).map((data) => Product.fromJson(data)).toList();
@@ -100,7 +116,7 @@ class CatalogProvider with ChangeNotifier {
       try {
         final response = await _supabase
           .from('products')
-          .select('*, profiles!products_seller_id_fkey(full_name, latitude, longitude, is_store_visible)') 
+          .select('*, profiles!products_seller_id_fkey(full_name, avatar_url, latitude, longitude, is_store_visible, rating, review_count)') 
           .order('created_at', ascending: false);
           
         _products = (response as List).map((data) => Product.fromJson(data)).toList();
@@ -113,7 +129,7 @@ class CatalogProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addProduct(String title, String price, String category) async {
+  Future<void> addProduct(String title, String price, String category, {String? imageUrl}) async {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) return; 
@@ -125,6 +141,7 @@ class CatalogProvider with ChangeNotifier {
         'price': int.parse(numericPrice),
         'category': category,
         'seller_id': user.id, 
+        if (imageUrl != null) 'image_url': imageUrl, 
       });
 
       await fetchProducts();
@@ -142,15 +159,21 @@ class CatalogProvider with ChangeNotifier {
     }
   }
 
-  Future<void> updateProduct(String id, String title, String price, String category) async {
+  Future<void> updateProduct(String id, String title, String price, String category, {String? imageUrl}) async {
     try {
       final numericPrice = price.replaceAll(RegExp(r'[^0-9]'), '');
 
-      await _supabase.from('products').update({
+      final updateData = {
         'title': title,
         'price': int.parse(numericPrice),
         'category': category,
-      }).eq('id', id);
+      };
+
+      if (imageUrl != null) {
+        updateData['image_url'] = imageUrl; 
+      }
+
+      await _supabase.from('products').update(updateData).eq('id', id);
 
       await fetchProducts(); 
     } catch (e) {

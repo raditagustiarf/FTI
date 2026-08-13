@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'; // Wajib ada untuk Auth
 import '../core/theme.dart';
-import 'main_navigation.dart'; // <-- PERUBAHAN DI SINI: Mengarah ke MainNavigation
+import 'main_navigation.dart'; 
+import 'register_screen.dart'; // <-- BARU: Import layar Register
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -42,7 +43,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (res.session != null && mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const MainNavigation()), // <-- PERUBAHAN DI SINI
+          MaterialPageRoute(builder: (context) => const MainNavigation()), 
         );
       }
     } on AuthException catch (e) {
@@ -78,99 +79,125 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       backgroundColor: AppTheme.darkBackground,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Icon(Icons.storefront, size: 80, color: AppTheme.neonGreen),
-              const SizedBox(height: 24),
-              const Text(
-                'Masuk ke Akun',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppTheme.textWhite,
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
+        child: Center( // Memastikan konten berada di tengah
+          child: SingleChildScrollView( // <-- BARU: Agar layar bisa di-scroll saat keyboard muncul
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Icon(Icons.storefront, size: 80, color: AppTheme.neonGreen),
+                const SizedBox(height: 24),
+                const Text(
+                  'Masuk ke Akun',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppTheme.textWhite,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Selamat datang kembali di Tetangga Market',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppTheme.textGray, fontSize: 14),
-              ),
-              const SizedBox(height: 48),
+                const SizedBox(height: 8),
+                const Text(
+                  'Selamat datang kembali di Tetangga Market',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppTheme.textGray, fontSize: 14),
+                ),
+                const SizedBox(height: 48),
 
-              // TextField Email
-              TextField(
-                controller: _emailController,
-                style: const TextStyle(color: Colors.white),
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
-                  labelText: 'Email',
-                  labelStyle: const TextStyle(color: AppTheme.textGray),
-                  prefixIcon: const Icon(Icons.email_outlined, color: AppTheme.textGray),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: const BorderSide(color: Colors.white24),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: const BorderSide(color: AppTheme.neonGreen),
-                    borderRadius: BorderRadius.circular(12),
+                // TextField Email
+                TextField(
+                  controller: _emailController,
+                  style: const TextStyle(color: Colors.white),
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: InputDecoration(
+                    labelText: 'Email',
+                    labelStyle: const TextStyle(color: AppTheme.textGray),
+                    prefixIcon: const Icon(Icons.email_outlined, color: AppTheme.textGray),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: Colors.white24),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: AppTheme.neonGreen),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              // TextField Password
-              TextField(
-                controller: _passwordController,
-                obscureText: true, // Sensor titik-titik
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Password',
-                  labelStyle: const TextStyle(color: AppTheme.textGray),
-                  prefixIcon: const Icon(Icons.lock_outline, color: AppTheme.textGray),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: const BorderSide(color: Colors.white24),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: const BorderSide(color: AppTheme.neonGreen),
-                    borderRadius: BorderRadius.circular(12),
+                // TextField Password
+                TextField(
+                  controller: _passwordController,
+                  obscureText: true, // Sensor titik-titik
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    labelStyle: const TextStyle(color: AppTheme.textGray),
+                    prefixIcon: const Icon(Icons.lock_outline, color: AppTheme.textGray),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: Colors.white24),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: AppTheme.neonGreen),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 32),
+                const SizedBox(height: 32),
 
-              // Tombol Login
-              ElevatedButton(
-                onPressed: _isLoading ? null : _login,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.neonGreen,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                // Tombol Login
+                ElevatedButton(
+                  onPressed: _isLoading ? null : _login,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.neonGreen,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
-                      )
-                    : const Text(
-                        'Masuk',
-                        style: TextStyle(
-                          color: Colors.black,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
+                        )
+                      : const Text(
+                          'Masuk',
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
+                ),
+                
+                const SizedBox(height: 24),
+                
+                // ==========================================
+                // BARU: Link menuju halaman Daftar (Register)
+                // ==========================================
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('Belum punya akun? ', style: TextStyle(color: AppTheme.textGray, fontSize: 12)),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const RegisterScreen()),
+                        );
+                      },
+                      child: const Text(
+                        'Daftar di sini', 
+                        style: TextStyle(color: AppTheme.neonGreen, fontSize: 12, fontWeight: FontWeight.bold)
                       ),
-              ),
-            ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

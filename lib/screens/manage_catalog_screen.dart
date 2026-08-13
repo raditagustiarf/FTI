@@ -9,10 +9,7 @@ class ManageCatalogScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // MEMBACA DATA HIDUP DARI PROVIDER
     final catalogData = Provider.of<CatalogProvider>(context);
-    
-    // Menggunakan myProducts agar hanya produk milik akun yang login yang muncul.
     final products = catalogData.myProducts;
 
     return Scaffold(
@@ -37,7 +34,6 @@ class ManageCatalogScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             
-            // GRID PRODUK OTOMATIS SESUAI DATA
             GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -62,7 +58,6 @@ class ManageCatalogScreen extends StatelessWidget {
     );
   }
 
-  // REUSABLE WIDGET: Kartu Produk
   Widget _buildCatalogItem(BuildContext context, Product product) {
     return Container(
       decoration: BoxDecoration(color: const Color(0xFF202020), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.1))),
@@ -74,7 +69,13 @@ class ManageCatalogScreen extends StatelessWidget {
               width: double.infinity,
               decoration: BoxDecoration(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
-                gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: product.gradientColors),
+                // PERBAIKAN: Menampilkan Foto Produk di Katalog Saya
+                image: product.imageUrl != null 
+                    ? DecorationImage(image: NetworkImage(product.imageUrl!), fit: BoxFit.cover)
+                    : null,
+                gradient: product.imageUrl == null 
+                    ? LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: product.gradientColors)
+                    : null,
               ),
             ),
           ),
@@ -89,27 +90,22 @@ class ManageCatalogScreen extends StatelessWidget {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    // ==========================================
-                    // TOMBOL EDIT SEKARANG BERFUNGSI!
-                    // ==========================================
                     Expanded(
                       child: GestureDetector(
                         onTap: () {
                           Navigator.push(
                             context,
-                            // Membuka layar tambah produk dalam "Mode Edit" dengan membawa data
                             MaterialPageRoute(builder: (context) => AddProductScreen(product: product)),
                           );
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 6),
                           decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white.withOpacity(0.13))),
-                          child: const Center(child: Text('✎ Edit', style: TextStyle(color: Colors.white70, fontSize: 10))),
+                          child: const Center(child: Text('✏️ Edit', style: TextStyle(color: Colors.white70, fontSize: 10))),
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // TOMBOL HAPUS BERFUNGSI!
                     GestureDetector(
                       onTap: () {
                         Provider.of<CatalogProvider>(context, listen: false).removeProduct(product.id);
@@ -117,7 +113,7 @@ class ManageCatalogScreen extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white.withOpacity(0.13))),
-                        child: const Text('⌫', style: TextStyle(color: Colors.white60, fontSize: 10)),
+                        child: const Text('🗑️', style: TextStyle(color: Colors.white60, fontSize: 10)),
                       ),
                     ),
                   ],
