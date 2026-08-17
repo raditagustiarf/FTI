@@ -102,7 +102,6 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(_userName, style: const TextStyle(color: AppTheme.textWhite, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
-                // Centang emas sementara disembunyikan sampai fitur verifikasi siap
               ],
             ),
             const SizedBox(height: 4),
@@ -110,42 +109,42 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             
             const SizedBox(height: 32),
             
-            // ==========================================
-            // KOTAK COMING SOON - Verifikasi Akun
-            // ==========================================
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1A1A1A),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.white.withOpacity(0.05)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 40, height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(12),
+            Opacity(
+              opacity: 0.6,
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.black26,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white.withOpacity(0.05)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 40, height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Center(child: Icon(Icons.lock_outline, color: Colors.white54, size: 20)), // Ikon Gembok
                     ),
-                    child: const Center(child: Text('⏳', style: TextStyle(color: AppTheme.textWhite, fontSize: 18))),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Verifikasi Akun', style: TextStyle(color: Colors.white70, fontSize: 15, fontWeight: FontWeight.bold)),
-                        SizedBox(height: 4),
-                        Text(
-                          'Fitur centang toko dan warna bubble lokasi spesial akan segera hadir. Nantikan update selanjutnya!',
-                          style: TextStyle(color: Colors.white38, fontSize: 11, height: 1.5),
-                        ),
-                      ],
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Verifikasi Akun', style: TextStyle(color: Colors.white70, fontSize: 15, fontWeight: FontWeight.bold)),
+                          SizedBox(height: 4),
+                          Text(
+                            'COMING SOON',
+                            style: TextStyle(color: AppTheme.neonGreen, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.0),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             
@@ -158,7 +157,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             
             _buildSettingsMenu(
               context: context,
-              emoji: '✏️', title: 'Edit Profil', subtitle: 'Ubah nama, foto, dan bio',
+              icon: Icons.edit_outlined, 
+              title: 'Edit Profil', 
+              subtitle: 'Ubah nama, foto, dan bio',
               onTap: () async {
                 final didUpdate = await Navigator.push(
                   context, 
@@ -172,7 +173,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             const SizedBox(height: 12),
             _buildSettingsMenu(
               context: context,
-              emoji: '⭐', title: 'Ulasan & Rating Penjual', subtitle: 'Lihat penilaian dari pembeli',
+              icon: Icons.star_border_rounded, 
+              title: 'Ulasan & Rating Penjual', 
+              subtitle: 'Lihat penilaian dari pembeli',
               onTap: () {
                 if (_userId.isNotEmpty) {
                   Navigator.push(context, MaterialPageRoute(builder: (context) => ReviewsScreen(
@@ -190,7 +193,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     );
   }
 
-  Widget _buildSettingsMenu({required BuildContext context, required String emoji, required String title, required String subtitle, required VoidCallback onTap}) {
+  Widget _buildSettingsMenu({required BuildContext context, required IconData icon, required String title, required String subtitle, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -200,8 +203,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           children: [
             Container(
               width: 36, height: 36,
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
-              child: Center(child: Text(emoji, style: const TextStyle(fontSize: 14))),
+              decoration: BoxDecoration(
+                color: AppTheme.neonGreen.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12)
+              ),
+              child: Center(child: Icon(icon, color: AppTheme.neonGreen, size: 18)),
             ),
             const SizedBox(width: 12),
             Expanded(

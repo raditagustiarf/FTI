@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; 
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/theme.dart';
-import '../providers/notification_provider.dart'; // <-- Bantuan dari Provider
+import '../providers/notification_provider.dart';
 import 'manage_catalog_screen.dart';
 import 'location_settings_screen.dart';
 import 'account_settings_screen.dart';
 import 'notifications_screen.dart';
-import 'login_screen.dart'; 
+import 'login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -30,7 +30,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _fetchProfileData();
   }
 
-  // MENGAMBIL DATA DARI SUPABASE
   Future<void> _fetchProfileData() async {
     try {
       final user = _supabase.auth.currentUser;
@@ -38,12 +37,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (mounted) {
           setState(() => _userEmail = user.email ?? '');
         }
-
         final response = await _supabase
             .from('profiles')
             .select('full_name, avatar_url') 
             .eq('id', user.id)
-            .maybeSingle(); 
+            .maybeSingle();
 
         if (mounted) {
           setState(() {
@@ -166,7 +164,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ),
                         
-                        // IKON LONCENG NOTIFIKASI BESERTA BADGE MERAH
                         GestureDetector(
                           onTap: () {
                             Navigator.push(
@@ -235,8 +232,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 24),
                     
+                  
                     _buildMenuCard(
-                      emoji: '🛍️',
+                      icon: Icons.inventory_2_outlined,
                       title: 'Kelola Katalog',
                       subtitle: 'Produk dan stok jualan',
                       onTap: () {
@@ -248,7 +246,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 12),
                     _buildMenuCard(
-                      emoji: '📍',
+                      icon: Icons.pin_drop_outlined,
                       title: 'Pengaturan Lokasi Jualan',
                       subtitle: 'Lokasi live & patokan alamat',
                       onTap: () {
@@ -260,7 +258,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 12),
                     _buildMenuCard(
-                      emoji: '⚙️',
+                      icon: Icons.settings_outlined,
                       title: 'Pengaturan Akun',
                       subtitle: 'Profil dan preferensi',
                       onTap: () async {
@@ -268,7 +266,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           context, 
                           MaterialPageRoute(builder: (context) => const AccountSettingsScreen())
                         );
-                        _fetchProfileData(); // Refresh jika foto diganti
+                        _fetchProfileData();
                       },
                     ),
                     
@@ -306,7 +304,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildMenuCard({
-    required String emoji, 
+    required IconData icon, 
     required String title, 
     required String subtitle,
     required VoidCallback onTap,
@@ -327,14 +325,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
+                color: AppTheme.neonGreen.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Center(
-                child: Text(
-                  emoji,
-                  style: const TextStyle(fontSize: 16),
-                ),
+                child: Icon(icon, color: AppTheme.neonGreen, size: 20),
               ),
             ),
             const SizedBox(width: 16),

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:supabase_flutter/supabase_flutter.dart'; 
 import '../core/theme.dart';
-import 'login_screen.dart'; // Tujuan setelah splash screen selesai
+import 'login_screen.dart';
+import 'main_navigation.dart'; 
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -19,32 +21,40 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   void initState() {
     super.initState();
 
-    // Mengatur pengontrol animasi (durasi 1.5 detik)
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     );
 
-    // Animasi muncul perlahan (Fade In)
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
     );
 
-    // Animasi membesar perlahan (Scale)
     _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOutBack),
     );
 
-    // Memulai animasi
     _animationController.forward();
 
-    // Pindah ke halaman Login setelah 3 detik
-    Timer(const Duration(seconds: 3), () {
+    Timer(const Duration(seconds: 3), _checkUserSession);
+  }
+
+  void _checkUserSession() {
+    final session = Supabase.instance.client.auth.currentSession;
+    
+    Widget nextScreen;
+    if (session != null) {
+      nextScreen = const MainNavigation();
+    } else {
+      nextScreen = const LoginScreen();
+    }
+
+    if (mounted) {
       Navigator.pushReplacement(
         context,
         PageRouteBuilder(
           transitionDuration: const Duration(milliseconds: 800),
-          pageBuilder: (context, animation, secondaryAnimation) => const LoginScreen(),
+          pageBuilder: (context, animation, secondaryAnimation) => nextScreen,
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(
               opacity: animation,
@@ -53,7 +63,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
           },
         ),
       );
-    });
+    }
   }
 
   @override
@@ -77,7 +87,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Kotak Logo dengan efek Glow
                     Container(
                       width: 100,
                       height: 100,
@@ -99,16 +108,17 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                       ),
                     ),
                     const SizedBox(height: 24),
-                    // Nama Aplikasi
+                    
                     const Text(
-                      'Tetangga Market',
+                      'LOKIT',
                       style: TextStyle(
                         color: AppTheme.textWhite,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -1.0,
+                        fontSize: 34,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 2.0,
                       ),
                     ),
+                    
                     const SizedBox(height: 8),
                     const Text(
                       'Belanja dekat, tetangga hebat.',

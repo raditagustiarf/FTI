@@ -65,7 +65,6 @@ class _LocationSettingsScreenState extends State<LocationSettingsScreen> {
     try {
       final myId = _supabase.auth.currentUser?.id;
       if (myId != null) {
-        // Tarik is_store_visible sekalian
         final data = await _supabase.from('profiles').select('latitude, longitude, is_store_visible').eq('id', myId).single();
 
         if (data['is_store_visible'] != null) {
@@ -253,11 +252,8 @@ class _LocationSettingsScreenState extends State<LocationSettingsScreen> {
                 try {
                   final myId = _supabase.auth.currentUser?.id;
                   if (myId != null) {
-                    
-                    // PERBAIKAN: Jika lokasi tidak null, simpan titik + status toggle.
-                    // Jika belum pilih lokasi tapi sekadar mau matikan toko, simpan status toggle-nya saja!
                     final updateData = <String, dynamic>{
-                      'is_store_visible': isLocationShared, // Kirim status saklar
+                      'is_store_visible': isLocationShared,
                     };
                     
                     if (_selectedLocation != null) {

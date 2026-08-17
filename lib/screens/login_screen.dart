@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; // Wajib ada untuk Auth
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme.dart';
 import 'main_navigation.dart'; 
-import 'register_screen.dart'; // <-- BARU: Import layar Register
+import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,13 +12,10 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // 1. Mendefinisikan Controller agar teks yang diketik bisa ditangkap
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  
-  bool _isLoading = false; // Untuk efek loading saat tombol ditekan
+  bool _isLoading = false;
 
-  // Fungsi Login Supabase
   Future<void> _login() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -33,13 +30,11 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Menembak data ke Supabase Auth
       final AuthResponse res = await Supabase.instance.client.auth.signInWithPassword(
         email: email,
         password: password,
       );
 
-      // Jika berhasil, pindah ke layar yang ada Navbar-nya (MainNavigation)
       if (res.session != null && mounted) {
         Navigator.pushReplacement(
           context,
@@ -47,14 +42,12 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } on AuthException catch (e) {
-      // Menangkap error khusus dari Supabase (misal: password salah)
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Gagal login: ${e.message}')),
         );
       }
     } catch (e) {
-      // Menangkap error lainnya
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Terjadi kesalahan: $e')),
@@ -79,8 +72,8 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       backgroundColor: AppTheme.darkBackground,
       body: SafeArea(
-        child: Center( // Memastikan konten berada di tengah
-          child: SingleChildScrollView( // <-- BARU: Agar layar bisa di-scroll saat keyboard muncul
+        child: Center(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -99,13 +92,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Selamat datang kembali di Tetangga Market',
+                  'Selamat datang kembali di LOKIT',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: AppTheme.textGray, fontSize: 14),
                 ),
                 const SizedBox(height: 48),
 
-                // TextField Email
                 TextField(
                   controller: _emailController,
                   style: const TextStyle(color: Colors.white),
@@ -125,11 +117,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // TextField Password
+                
                 TextField(
                   controller: _passwordController,
-                  obscureText: true, // Sensor titik-titik
+                  obscureText: true, 
                   style: const TextStyle(color: Colors.white),
                   decoration: InputDecoration(
                     labelText: 'Password',
@@ -146,8 +137,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
-
-                // Tombol Login
+                
                 ElevatedButton(
                   onPressed: _isLoading ? null : _login,
                   style: ElevatedButton.styleFrom(
@@ -174,10 +164,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 
                 const SizedBox(height: 24),
-                
-                // ==========================================
-                // BARU: Link menuju halaman Daftar (Register)
-                // ==========================================
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

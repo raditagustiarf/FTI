@@ -113,7 +113,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         await _supabase.from('profiles').update({
           'full_name': newName,
           'bio': _bioController.text,
-          // Nomor HP tidak di-update agar selalu sama dengan data asli
         }).eq('id', user.id);
         
         if (mounted) {
@@ -196,15 +195,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   
                   _buildInputField(label: 'Nama Lengkap', controller: _nameController),
                   const SizedBox(height: 16),
-                  
-                  // ==========================================
-                  // NOMOR HP SEKARANG DIKUNCI (READ-ONLY)
-                  // ==========================================
                   _buildInputField(
                     label: 'Nomor Telepon (Tidak bisa diubah)', 
                     controller: _phoneController, 
                     hint: '+62...',
-                    isReadOnly: true, // Kunci teks agar tidak bisa diedit
+                    isReadOnly: true,
                   ),
                   const SizedBox(height: 16),
                   
@@ -234,7 +229,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  // Menambahkan parameter isReadOnly
   Widget _buildInputField({required String label, required TextEditingController controller, String? hint, int maxLines = 1, bool isReadOnly = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -243,14 +237,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: isReadOnly ? Colors.black12 : Colors.white.withOpacity(0.045), // Latar belakang lebih gelap kalau terkunci
+            color: isReadOnly ? Colors.black12 : Colors.white.withOpacity(0.045),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.white.withOpacity(isReadOnly ? 0.05 : 0.15)),
           ),
           child: TextField(
             controller: controller,
             maxLines: maxLines,
-            readOnly: isReadOnly, // Memblokir keyboard agar tidak muncul
+            readOnly: isReadOnly,
             style: TextStyle(color: isReadOnly ? Colors.white38 : AppTheme.textWhite, fontSize: 13, fontWeight: FontWeight.w600), // Warna teks memudar jika terkunci
             decoration: InputDecoration(
               hintText: hint,

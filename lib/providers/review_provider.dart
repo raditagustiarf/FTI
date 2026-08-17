@@ -10,7 +10,6 @@ class ReviewProvider with ChangeNotifier {
   List<Map<String, dynamic>> get reviews => _reviews;
   bool get isLoading => _isLoading;
 
-  // 1. Tarik semua ulasan untuk penjual tertentu
   Future<void> fetchReviews(String sellerId) async {
     _isLoading = true;
     notifyListeners();
@@ -31,13 +30,11 @@ class ReviewProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // 2. Kirim Ulasan Baru & Update Rata-rata Bintang Penjual
   Future<void> submitReview(String sellerId, int rating, String text) async {
     final myId = _supabase.auth.currentUser?.id;
-    if (myId == null || myId == sellerId) return; // Tidak bisa review diri sendiri
+    if (myId == null || myId == sellerId) return;
 
     try {
-      // Upsert: Masukkan baru, atau Timpa jika sudah pernah review
       await _supabase.from('reviews').upsert({
         'seller_id': sellerId,
         'buyer_id': myId,
@@ -45,7 +42,6 @@ class ReviewProvider with ChangeNotifier {
         'review_text': text,
       });
 
-      // Hitung ulang rata-rata bintang
       await fetchReviews(sellerId);
       if (_reviews.isNotEmpty) {
         double totalRating = 0;
@@ -54,7 +50,6 @@ class ReviewProvider with ChangeNotifier {
         }
         double avgRating = totalRating / _reviews.length;
 
-        // Simpan nilai rata-rata ke tabel profil penjual
         await _supabase.from('profiles').update({
           'rating': avgRating,
           'review_count': _reviews.length,

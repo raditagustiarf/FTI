@@ -11,7 +11,6 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  // 1. Controller untuk menangkap semua ketikan
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
@@ -22,7 +21,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscureRepeatPassword = true;
   bool _isLoading = false;
 
-  // FUNGSI UTAMA: Mendaftar ke Supabase
   Future<void> _register() async {
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
@@ -30,7 +28,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final password = _passwordController.text;
     final repeatPassword = _repeatPasswordController.text;
 
-    // VALIDASI 1: Cek apakah ada kolom yang kosong
     if (name.isEmpty || email.isEmpty || phone.isEmpty || password.isEmpty || repeatPassword.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Semua kolom wajib diisi!'), backgroundColor: Colors.orangeAccent),
@@ -38,7 +35,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    // VALIDASI 2: Cek apakah password cocok
     if (password != repeatPassword) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Kata sandi tidak cocok!'), backgroundColor: Colors.redAccent),
@@ -46,7 +42,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    // VALIDASI 3: Minimal 6 karakter
     if (password.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Kata sandi minimal 6 karakter!'), backgroundColor: Colors.orangeAccent),
@@ -57,7 +52,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Mendaftarkan Akun ke Supabase Auth
       final AuthResponse res = await Supabase.instance.client.auth.signUp(
         email: email,
         password: password,
@@ -65,18 +59,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       final user = res.user;
       if (user != null) {
-        // 2. Menyimpan Nama dan Nomor HP ke Tabel Profiles
         await Supabase.instance.client.from('profiles').upsert({
           'id': user.id,
           'full_name': name,
           'phone': phone,
-          // Set nilai default agar aman
           'rating': 0.0,
           'review_count': 0,
           'is_store_visible': true,
         });
 
-        // 3. Arahkan masuk ke dalam aplikasi
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Pendaftaran berhasil! Selamat datang! 🎉'), backgroundColor: AppTheme.neonGreen),
@@ -147,7 +138,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 32),
 
-              // 2. FORM INPUT
               _buildInputField(
                 label: 'Nama Pengguna',
                 hint: 'Contoh: Asep Knalpot',
@@ -175,7 +165,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Kata Sandi
               _buildPasswordField(
                 label: 'Kata Sandi',
                 hint: 'Minimal 6 karakter',
@@ -185,7 +174,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Ulangi Kata Sandi
               _buildPasswordField(
                 label: 'Ulangi Kata Sandi',
                 hint: 'Ketik ulang kata sandi',
@@ -196,7 +184,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
               
               const SizedBox(height: 40),
 
-              // 3. TOMBOL DAFTAR
               ElevatedButton(
                 onPressed: _isLoading ? null : _register,
                 style: ElevatedButton.styleFrom(
@@ -211,14 +198,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 24),
 
-              // 4. LINK KE LOGIN
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Text('Sudah punya akun? ', style: TextStyle(color: AppTheme.textGray, fontSize: 12)),
                   GestureDetector(
                     onTap: () {
-                      Navigator.pop(context); // Kembali ke halaman login
+                      Navigator.pop(context);
                     },
                     child: const Text('Masuk di sini', style: TextStyle(color: AppTheme.neonGreen, fontSize: 12, fontWeight: FontWeight.bold)),
                   ),
@@ -232,7 +218,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // REUSABLE WIDGET: Text Input Standard
   Widget _buildInputField({
     required String label, 
     required String hint, 
@@ -268,7 +253,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // REUSABLE WIDGET: Text Input Khusus Password
   Widget _buildPasswordField({
     required String label,
     required String hint,

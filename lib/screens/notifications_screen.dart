@@ -4,10 +4,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/theme.dart';
 import '../providers/notification_provider.dart';
-import 'chat_detail_screen.dart'; // <-- Import layar Chat
-import 'reviews_screen.dart';     // <-- Import layar Ulasan
+import 'chat_detail_screen.dart'; 
+import 'reviews_screen.dart';     
 
-// Helper untuk inisial nama
 String getInitials(String name) {
   if (name.isEmpty) return '?';
   final parts = name.trim().split(' ');
@@ -30,7 +29,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   void initState() {
     super.initState();
-    // Otomatis tandai semua "sudah dibaca" saat layar ini dibuka
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<NotificationProvider>(context, listen: false).markAllAsRead();
     });
@@ -45,56 +43,35 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return '${difference.inDays} hari lalu';
   }
 
-  // ==========================================
-  // LOGIKA NAVIGASI (Membuka Layar Berdasarkan Tipe)
-  // ==========================================
   Future<void> _handleNotificationClick(Map<String, dynamic> notif) async {
     final type = notif['type'];
     final referenceId = notif['reference_id'];
-    
-    // Jika notifikasi lama yang belum punya ID, abaikan saja
     if (referenceId == null) return; 
 
-    // Munculkan indikator loading
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator(color: AppTheme.neonGreen)),
-    );
+    showDialog(context: context, barrierDismissible: false, builder: (context) => const Center(child: CircularProgressIndicator(color: AppTheme.neonGreen)));
 
     try {
       if (type == 'chat') {
-        // Cari nama partner chat-nya
         final response = await _supabase.from('profiles').select('full_name').eq('id', referenceId).maybeSingle();
         final partnerName = response?['full_name'] ?? 'Pengguna';
         
         if (mounted) {
-          Navigator.pop(context); // Tutup loading
-          Navigator.push(context, MaterialPageRoute(builder: (context) => ChatDetailScreen(
-            partnerId: referenceId,
-            partnerName: partnerName,
-            partnerInitials: getInitials(partnerName),
-          )));
+          Navigator.pop(context); 
+          Navigator.push(context, MaterialPageRoute(builder: (context) => ChatDetailScreen(partnerId: referenceId, partnerName: partnerName, partnerInitials: getInitials(partnerName))));
         }
       } 
       else if (type == 'review') {
-        // Buka layar Ulasan (Kita tarik data profil kita sendiri dulu)
         final myId = _supabase.auth.currentUser!.id;
         final myProfile = await _supabase.from('profiles').select('full_name, rating, review_count').eq('id', myId).maybeSingle();
         
         if (mounted) {
-          Navigator.pop(context); // Tutup loading
-          Navigator.push(context, MaterialPageRoute(builder: (context) => ReviewsScreen(
-            sellerId: myId,
-            sellerName: myProfile?['full_name'] ?? 'Toko Saya',
-            currentRating: (myProfile?['rating'] ?? 0.0).toDouble(),
-            reviewCount: (myProfile?['review_count'] ?? 0).toInt(),
-          )));
+          Navigator.pop(context); 
+          Navigator.push(context, MaterialPageRoute(builder: (context) => ReviewsScreen(sellerId: myId, sellerName: myProfile?['full_name'] ?? 'Toko Saya', currentRating: (myProfile?['rating'] ?? 0.0).toDouble(), reviewCount: (myProfile?['review_count'] ?? 0).toInt())));
         }
       }
     } catch (e) {
       if (mounted) {
-        Navigator.pop(context); // Tutup loading
+        Navigator.pop(context); 
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal membuka: $e')));
       }
     }
@@ -107,10 +84,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       appBar: AppBar(
         backgroundColor: AppTheme.darkBackground,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white70),
-          onPressed: () => Navigator.pop(context),
-        ),
+        leading: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white70), onPressed: () => Navigator.pop(context)),
         title: const Text('Notifikasi', style: TextStyle(color: AppTheme.textWhite, fontWeight: FontWeight.bold, fontSize: 17)),
         centerTitle: false,
       ),
@@ -119,37 +93,57 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           final notifs = provider.notifications;
 
           if (notifs.isEmpty) {
-            return const Center(
-              child: Text('Belum ada notifikasi.', style: TextStyle(color: Colors.white54)),
+            return RefreshIndicator(
+              color: AppTheme.neonGreen, backgroundColor: AppTheme.glassBackground,
+              onRefresh: () async => await provider.fetchNotifications(),
+              child: ListView(
+                children: const [
+                  SizedBox(height: 300),
+                  Center(child: Text('Belum ada notifikasi.', style: TextStyle(color: Colors.white54))),
+                ],
+              ),
             );
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(20),
-            itemCount: notifs.length,
-            itemBuilder: (context, index) {
-              final n = notifs[index];
-              
-              final isChat = n['type'] == 'chat';
-              final icon = isChat ? Icons.chat_bubble : Icons.star;
-              final color = isChat ? AppTheme.neonGreen : const Color(0xFFFFD700);
+          return RefreshIndicator(
+            color: AppTheme.neonGreen, backgroundColor: AppTheme.glassBackground,
+            onRefresh: () async => await provider.fetchNotifications(),
+            child: ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(20),
+              itemCount: notifs.length,
+              itemBuilder: (context, index) {
+                final n = notifs[index];
+                final isChat = n['type'] == 'chat';
+                final icon = isChat ? Icons.chat_bubble : Icons.star;
+                final color = isChat ? AppTheme.neonGreen : const Color(0xFFFFD700);
 
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: GestureDetector(
-                  // PASANG FUNGSI KLIK DI SINI
-                  onTap: () => _handleNotificationClick(n),
-                  child: _buildNotificationItem(
-                    icon: icon,
-                    iconColor: color,
-                    title: n['title'],
-                    message: n['message'],
-                    time: _formatTime(n['created_at']),
-                    isUnread: n['is_read'] == false, 
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Dismissible(
+                    key: Key(n['id'].toString()),
+                    direction: DismissDirection.endToStart,
+                    background: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(16)),
+                      alignment: Alignment.centerRight,
+                      child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
+                    ),
+                    onDismissed: (direction) {
+                      provider.deleteNotification(n['id']);
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Notifikasi dihapus'), duration: Duration(seconds: 1)));
+                    },
+                    child: GestureDetector(
+                      onTap: () => _handleNotificationClick(n),
+                      child: _buildNotificationItem(
+                        icon: icon, iconColor: color, title: n['title'],
+                        message: n['message'], time: _formatTime(n['created_at']), isUnread: n['is_read'] == false, 
+                      ),
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           );
         }
       ),
@@ -165,9 +159,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       decoration: BoxDecoration(
         color: isUnread ? Colors.white.withOpacity(0.08) : const Color(0xFF1A1A1A),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isUnread ? AppTheme.neonGreen.withOpacity(0.3) : Colors.white.withOpacity(0.05),
-        ),
+        border: Border.all(color: isUnread ? AppTheme.neonGreen.withOpacity(0.3) : Colors.white.withOpacity(0.05)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

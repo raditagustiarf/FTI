@@ -155,7 +155,7 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
                         },
                       ),
               ),
-              if (!isMyStore) // Tampilkan tombol Tulis Ulasan jika bukan toko kita sendiri
+              if (!isMyStore)
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withOpacity(0.1)))),

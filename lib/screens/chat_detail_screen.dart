@@ -24,14 +24,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   
-  // PERBAIKAN 1: Simpan provider ke dalam variabel agar aman dari error 'deactivated widget'
   late ChatProvider _chatProvider; 
 
   @override
   void initState() {
     super.initState();
     
-    // Simpan Provider ke variabel saat layar pertama kali dibuka
     _chatProvider = Provider.of<ChatProvider>(context, listen: false);
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -41,7 +39,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   @override
   void dispose() {
-    // PERBAIKAN 2: Gunakan variabel yang sudah disimpan, BUKAN context!
     _chatProvider.disposeStream();
     _messageController.dispose();
     _scrollController.dispose();
@@ -62,7 +59,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   Widget build(BuildContext context) {
     final chatData = Provider.of<ChatProvider>(context);
     
-    // Mengambil ID kita secara real-time untuk mengecek ini pesan kita atau bukan
     final myUserId = Supabase.instance.client.auth.currentUser?.id;
     
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
@@ -82,7 +78,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 itemCount: chatData.messages.length,
                 itemBuilder: (context, index) {
                   final msg = chatData.messages[index];
-                  // Cek apakah pesan ini milik kita?
                   final isMe = msg.senderId == myUserId;
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16),
@@ -180,7 +175,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     if (text.isNotEmpty) {
       _messageController.clear(); 
       try {
-        // Gunakan _chatProvider yang sudah disimpan
         await _chatProvider.sendMessage(widget.partnerId, text);
         _scrollToBottom(); 
       } catch (e) {

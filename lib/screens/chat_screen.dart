@@ -3,7 +3,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme.dart';
 import 'chat_detail_screen.dart';
 
-// Helper kecil untuk mengambil huruf depan nama
 String getInitials(String name) {
   if (name.isEmpty) return '?';
   final parts = name.trim().split(' ');
@@ -26,25 +25,28 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isLoading = true;
   RealtimeChannel? _inboxSubscription;
 
+  // ==========================================
+  // BARU: Penampung Kata Kunci Pencarian
+  // ==========================================
+  String _searchQuery = '';
+
   @override
   void initState() {
     super.initState();
     _fetchChatRooms();
-    _setupRealtimeInbox(); 
+    _setupRealtimeInbox();
   }
 
-  // Fungsi untuk mendengarkan pesan baru secara LIVE
   void _setupRealtimeInbox() {
     _inboxSubscription = _supabase
         .channel('public:messages_inbox')
         .onPostgresChanges(
-          // PERBAIKAN: Ubah menjadi .all agar mendeteksi status "is_read" yang berubah
           event: PostgresChangeEvent.all, 
           schema: 'public',
           table: 'messages',
           callback: (payload) {
              _fetchChatRooms(); 
-          },
+           },
         )
         .subscribe();
   }
@@ -57,7 +59,6 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
-  // Mengambil daftar orang yang pernah chat dengan kita
   Future<void> _fetchChatRooms() async {
     final myId = _supabase.auth.currentUser?.id;
     if (myId == null) return;
@@ -87,12 +88,11 @@ class _ChatScreenState extends State<ChatScreen> {
             'partnerId': partnerId,
             'partnerName': partnerName,
             'lastMessage': msg['content'],
-            'time': _formatTime(DateTime.parse(msg['created_at'])), 
+            'time': _formatTime(DateTime.parse(msg['created_at'])),
             'unreadCount': 0, 
           };
         }
 
-        // Hitung pesan yang belum dibaca
         if (!isMeSender && msg['is_read'] == false) {
           uniqueRooms[partnerId]!['unreadCount'] = (uniqueRooms[partnerId]!['unreadCount'] as int) + 1;
         }
@@ -107,6 +107,33 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       debugPrint('Error fetch chat rooms: $e');
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _deleteChat(String partnerId) async {
+    final myId = _supabase.auth.currentUser?.id;
+    if (myId == null) return;
+    
+    try {
+      await _supabase.from('messages').delete().match({
+        'sender_id': myId,
+        'receiver_id': partnerId
+      });
+      
+      await _supabase.from('messages').delete().match({
+        'sender_id': partnerId,
+        'receiver_id': myId
+      });
+
+      _fetchChatRooms(); 
+      
+    } catch (e) {
+      debugPrint('Error delete chat: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menghapus di server: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
     }
   }
 
@@ -125,6 +152,16 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ==========================================
+    // BARU: Logika Penyaring Chat (Filter/Search)
+    // ==========================================
+    final filteredRooms = _chatRooms.where((room) {
+      final query = _searchQuery.toLowerCase();
+      final nameMatch = room['partnerName'].toString().toLowerCase().contains(query);
+      final msgMatch = room['lastMessage'].toString().toLowerCase().contains(query);
+      return nameMatch || msgMatch;
+    }).toList();
+
     return Scaffold(
       backgroundColor: AppTheme.darkBackground,
       appBar: AppBar(
@@ -140,11 +177,15 @@ class _ChatScreenState extends State<ChatScreen> {
         ? const Center(child: CircularProgressIndicator(color: AppTheme.neonGreen))
         : RefreshIndicator(
             color: AppTheme.neonGreen,
-            backgroundColor: AppTheme.darkBackground,
+            backgroundColor: AppTheme.glassBackground,
             onRefresh: _fetchChatRooms,
             child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               children: [
+                // ==========================================
+                // BARU: Kolom Pencarian Yang Berfungsi (TextField)
+                // ==========================================
                 Container(
                   height: 44,
                   decoration: BoxDecoration(
@@ -153,11 +194,39 @@ class _ChatScreenState extends State<ChatScreen> {
                     border: Border.all(color: Colors.white.withOpacity(0.1)),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.search, color: Colors.white38, size: 18),
-                      SizedBox(width: 8),
-                      Text('Cari pesan atau nama tetangga...', style: TextStyle(color: Colors.white38, fontSize: 13)),
+                      const Icon(Icons.search, color: Colors.white38, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          style: const TextStyle(color: AppTheme.textWhite, fontSize: 13),
+                          onChanged: (value) {
+                            setState(() {
+                              _searchQuery = value; // Update kata kunci saat diketik
+                            });
+                          },
+                          decoration: InputDecoration(
+                            hintText: 'Cari pesan atau nama tetangga...', 
+                            hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                            // Munculkan tombol silang (X) jika ada teks
+                            suffixIcon: _searchQuery.isNotEmpty 
+                              ? GestureDetector(
+                                  onTap: () {
+                                    FocusScope.of(context).unfocus();
+                                    setState(() {
+                                      _searchQuery = '';
+                                    });
+                                  },
+                                  child: const Icon(Icons.close, color: Colors.white38, size: 16),
+                                )
+                              : null,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -174,19 +243,67 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ),
                   )
+                else if (filteredRooms.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 40),
+                    child: Center(
+                      child: Text(
+                        'Pencarian tidak ditemukan.', 
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white54, height: 1.5)
+                      ),
+                    ),
+                  )
                 else
-                  ..._chatRooms.map((room) {
+                  ...filteredRooms.map((room) {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 20),
-                      child: _buildChatItem(
-                        context: context,
-                        partnerId: room['partnerId'], 
-                        name: room['partnerName'],
-                        message: room['lastMessage'],
-                        time: room['time'],
-                        initials: getInitials(room['partnerName']),
-                        unreadCount: room['unreadCount'], 
-                        isOnline: false, 
+                      child: Dismissible(
+                        key: Key(room['partnerId']),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 20),
+                          decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(25)),
+                          child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
+                        ),
+                        confirmDismiss: (direction) async {
+                          return await showDialog(
+                            context: context,
+                            builder: (BuildContext context) {
+                              return AlertDialog(
+                                backgroundColor: AppTheme.glassBackground,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Colors.white12)),
+                                title: const Text("Hapus Obrolan?", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                                content: Text("Semua pesan dengan ${room['partnerName']} akan dihapus permanen.", style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.5)),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text("Batal", style: TextStyle(color: Colors.white54))),
+                                  ElevatedButton(
+                                    onPressed: () => Navigator.of(context).pop(true), 
+                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                                    child: const Text("Hapus", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                        },
+                        onDismissed: (direction) {
+                          setState(() {
+                            _chatRooms.removeWhere((r) => r['partnerId'] == room['partnerId']);
+                          });
+                          _deleteChat(room['partnerId']);
+                        },
+                        child: _buildChatItem(
+                          context: context,
+                          partnerId: room['partnerId'], 
+                          name: room['partnerName'],
+                          message: room['lastMessage'],
+                          time: room['time'],
+                          initials: getInitials(room['partnerName']),
+                          unreadCount: room['unreadCount'], 
+                          isOnline: false, 
+                        ),
                       ),
                     );
                   }),
@@ -197,38 +314,25 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildChatItem({
-    required BuildContext context,
-    required String partnerId,
-    required String name,
-    required String message,
-    required String time,
-    required String initials,
-    required int unreadCount, 
-    required bool isOnline,
+    required BuildContext context, required String partnerId, required String name, required String message,
+    required String time, required String initials, required int unreadCount, required bool isOnline,
   }) {
-    final hasUnread = unreadCount > 0; 
-
+    final hasUnread = unreadCount > 0;
+    
     return GestureDetector(
       onTap: () async {
         final myId = _supabase.auth.currentUser?.id;
         
         if (hasUnread) {
-          // Trik visual
           setState(() {
             final index = _chatRooms.indexWhere((r) => r['partnerId'] == partnerId);
             if (index != -1) {
               _chatRooms[index]['unreadCount'] = 0; 
             }
           });
-
           if (myId != null) {
             try {
-              // PERBAIKAN: Harus di-await agar Database benar-benar memperbarui datanya sebelum kita memuat ulang!
-              await _supabase
-                  .from('messages')
-                  .update({'is_read': true})
-                  .eq('sender_id', partnerId)
-                  .eq('receiver_id', myId);
+              await _supabase.from('messages').update({'is_read': true}).eq('sender_id', partnerId).eq('receiver_id', myId);
             } catch (e) {
               debugPrint('Gagal menandai pesan telah dibaca: $e');
             }
@@ -238,11 +342,7 @@ class _ChatScreenState extends State<ChatScreen> {
         if (context.mounted) {
           await Navigator.push(
             context, 
-            MaterialPageRoute(builder: (context) => ChatDetailScreen(
-              partnerId: partnerId,
-              partnerName: name,
-              partnerInitials: initials,
-            ))
+            MaterialPageRoute(builder: (context) => ChatDetailScreen(partnerId: partnerId, partnerName: name, partnerInitials: initials))
           );
           _fetchChatRooms(); 
         }
@@ -256,10 +356,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 width: 52, height: 52,
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft, end: Alignment.bottomRight,
-                    colors: [Color(0xFFE7B48E), Color(0xFF925B44)], 
-                  ),
+                  gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFE7B48E), Color(0xFF925B44)]),
                 ),
                 child: Center(child: Text(initials, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16))),
               ),
@@ -268,11 +365,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   right: 0, bottom: 0,
                   child: Container(
                     width: 14, height: 14,
-                    decoration: BoxDecoration(
-                      color: AppTheme.neonGreen,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppTheme.darkBackground, width: 2),
-                    ),
+                    decoration: BoxDecoration(color: AppTheme.neonGreen, shape: BoxShape.circle, border: Border.all(color: AppTheme.darkBackground, width: 2)),
                   ),
                 ),
             ],
@@ -297,8 +390,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     Expanded(
                       child: Text(
                         message, 
-                        maxLines: 1, 
-                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
                         style: TextStyle(color: hasUnread ? Colors.white : AppTheme.textGray, fontSize: 13)
                       ),
                     ),
@@ -306,14 +398,8 @@ class _ChatScreenState extends State<ChatScreen> {
                       Container(
                         margin: const EdgeInsets.only(left: 8),
                         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: AppTheme.neonGreen,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          unreadCount > 99 ? '99+' : unreadCount.toString(),
-                          style: const TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold),
-                        ),
+                        decoration: BoxDecoration(color: AppTheme.neonGreen, borderRadius: BorderRadius.circular(10)),
+                        child: Text(unreadCount > 99 ? '99+' : unreadCount.toString(), style: const TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold)),
                       ),
                   ],
                 ),

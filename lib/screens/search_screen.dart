@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart' hide Path;
-import 'package:shared_preferences/shared_preferences.dart'; // <-- Bantuan Memori Lokal
+import 'package:shared_preferences/shared_preferences.dart';
 import '../core/theme.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -20,16 +20,14 @@ class _SearchScreenState extends State<SearchScreen> {
   List<dynamic> _searchResults = [];
   Timer? _debounce;
 
-  // Riwayat Pencarian (Akan diisi dari memori HP)
   List<String> _history = [];
 
   @override
   void initState() {
     super.initState();
-    _loadHistory(); // Tarik riwayat saat layar dibuka
+    _loadHistory();
   }
 
-  // FUNGSI 1: Memuat Riwayat dari Memori
   Future<void> _loadHistory() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -37,16 +35,12 @@ class _SearchScreenState extends State<SearchScreen> {
     });
   }
 
-  // FUNGSI 2: Menyimpan Riwayat Baru ke Memori
   Future<void> _saveToHistory(String locationName) async {
     final prefs = await SharedPreferences.getInstance();
     
-    // Hapus jika sudah ada (agar pindah ke paling atas)
     _history.remove(locationName);
-    // Masukkan ke urutan paling atas
     _history.insert(0, locationName);
     
-    // Batasi maksimal 5 riwayat saja agar tidak kepanjangan
     if (_history.length > 5) {
       _history = _history.sublist(0, 5);
     }
@@ -186,7 +180,6 @@ class _SearchScreenState extends State<SearchScreen> {
                       children: [
                         const Text('RIWAYAT LOKASI', style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
                         const SizedBox(height: 12),
-                        // Menampilkan data history dari memori secara live
                         ..._history.map((item) => _buildHistoryItem(item)),
                       ],
                     )
@@ -229,7 +222,6 @@ class _SearchScreenState extends State<SearchScreen> {
                                   ),
                                 );
                               },
-                              // Kirimkan fungsi _saveToHistory ke kartu
                               child: _buildLocationResultCard(title, subtitle, lat, lon),
                             );
                           },
@@ -271,7 +263,6 @@ class _SearchScreenState extends State<SearchScreen> {
     return GestureDetector(
       onTap: () {
         FocusScope.of(context).unfocus(); 
-        // SIMPAN KE RIWAYAT SAAT DIKLIK!
         _saveToHistory(title);
         Navigator.pop(context, LatLng(lat, lon));
       },

@@ -16,23 +16,17 @@ class PickLocationScreen extends StatefulWidget {
 class _PickLocationScreenState extends State<PickLocationScreen> {
   final MapController _mapController = MapController();
   
-  // Titik awal (Pangkalpinang)
   LatLng _currentCenter = const LatLng(-2.1292, 106.1106);
   bool _isGettingLocation = false;
   
-  // Variabel penampung nama jalan
   String _addressName = 'Mencari lokasi...'; 
 
   @override
   void initState() {
     super.initState();
-    // Cari nama jalan saat pertama kali layar dibuka
     _getAddressFromLatLng(_currentCenter.latitude, _currentCenter.longitude);
   }
 
-  // ========================================================
-  // MESIN PENEBAK JALAN SUPER DETAIL
-  // ========================================================
   Future<void> _getAddressFromLatLng(double lat, double lng) async {
     try {
       final url = 'https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lng&zoom=18&addressdetails=1';
@@ -45,7 +39,6 @@ class _PickLocationScreenState extends State<PickLocationScreen> {
         if (data['address'] != null) {
           final address = data['address'];
           
-          // Memperlebar tangkapan semua jenis jalan!
           final road = address['road'] ?? 
                        address['residential'] ?? 
                        address['highway'] ?? 
@@ -54,7 +47,6 @@ class _PickLocationScreenState extends State<PickLocationScreen> {
                        address['path'] ?? 
                        address['footway'] ?? '';
                        
-          // Detail tambahan seperti gedung/kampung/kelurahan
           final building = address['building'] ?? address['amenity'] ?? address['shop'] ?? '';
           final suburb = address['suburb'] ?? address['village'] ?? address['neighbourhood'] ?? address['hamlet'] ?? '';
           final city = address['city'] ?? address['town'] ?? address['municipality'] ?? '';
@@ -69,10 +61,8 @@ class _PickLocationScreenState extends State<PickLocationScreen> {
           if (mounted) {
             setState(() {
               if (parts.isNotEmpty) {
-                // Tampilkan secara rapi: "Nama Gedung, Nama Jalan, Kelurahan"
                 _addressName = parts.join(', ');
               } else {
-                // Jika masih kosong, ambil langsung nama terdepan dari display_name
                 _addressName = data['display_name'].split(',')[0];
               }
             });
@@ -86,9 +76,6 @@ class _PickLocationScreenState extends State<PickLocationScreen> {
     }
   }
 
-  // ========================================================
-  // TARIK KOORDINAT DARI GPS HP
-  // ========================================================
   Future<void> _getCurrentLocation() async {
     setState(() => _isGettingLocation = true);
     try {
@@ -108,7 +95,6 @@ class _PickLocationScreenState extends State<PickLocationScreen> {
       _mapController.move(myLocation, 16.5);
       setState(() => _currentCenter = myLocation);
       
-      // Update tulisan jalan saat GPS berhasil memindahkan peta
       _getAddressFromLatLng(myLocation.latitude, myLocation.longitude);
 
     } catch (e) {
@@ -126,19 +112,16 @@ class _PickLocationScreenState extends State<PickLocationScreen> {
       backgroundColor: AppTheme.darkBackground,
       body: Stack(
         children: [
-          // 1. PETA INTERAKTIF
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
               initialCenter: _currentCenter,
               initialZoom: 15.0,
-              // Saat peta sedang digeser, perbarui kordinat secara live
               onPositionChanged: (position, hasGesture) {
                 if (position.center != null) {
                   setState(() => _currentCenter = position.center!);
                 }
               },
-              // SAAT PETA BERHENTI DIGESER -> Cari nama jalan baru!
               onMapEvent: (event) {
                 if (event is MapEventMoveEnd) {
                   _getAddressFromLatLng(_currentCenter.latitude, _currentCenter.longitude);
@@ -148,12 +131,11 @@ class _PickLocationScreenState extends State<PickLocationScreen> {
             children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.tetanggamarket.app',
+                userAgentPackageName: 'com.lokit.app',
               ),
             ],
           ),
 
-          // 2. CROSSHAIR
           IgnorePointer(
             child: Center(
               child: Padding(
@@ -179,7 +161,6 @@ class _PickLocationScreenState extends State<PickLocationScreen> {
             ),
           ),
 
-          // 4. HEADER KEMBALI
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -204,7 +185,6 @@ class _PickLocationScreenState extends State<PickLocationScreen> {
             ),
           ),
 
-          // 5. KARTU KONFIRMASI (MENAMPILKAN NAMA JALAN DETAIL)
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
@@ -218,7 +198,7 @@ class _PickLocationScreenState extends State<PickLocationScreen> {
                   const Text('LOKASI TERPILIH', style: TextStyle(color: AppTheme.neonGreen, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
                   const SizedBox(height: 8),
                   
-                  // Menampilkan Nama Jalan
+                  
                   Text(
                     _addressName, 
                     style: const TextStyle(color: AppTheme.textWhite, fontSize: 16, fontWeight: FontWeight.bold, height: 1.4),

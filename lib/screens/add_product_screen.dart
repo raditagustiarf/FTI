@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../core/theme.dart';
 import '../providers/catalog_provider.dart';
 
@@ -11,11 +12,14 @@ class CurrencyInputFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
     if (newValue.text.isEmpty) return newValue;
+
     final numericString = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
     if (numericString.isEmpty) return newValue;
+
     String result = numericString;
     String formatted = '';
     int count = 0;
+
     for (int i = result.length - 1; i >= 0; i--) {
       if (count == 3) {
         formatted = '.$formatted';
@@ -24,6 +28,7 @@ class CurrencyInputFormatter extends TextInputFormatter {
       formatted = result[i] + formatted;
       count++;
     }
+
     return TextEditingValue(text: formatted, selection: TextSelection.collapsed(offset: formatted.length));
   }
 }
@@ -39,13 +44,14 @@ class AddProductScreen extends StatefulWidget {
 class _AddProductScreenState extends State<AddProductScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
+  final TextEditingController _descController = TextEditingController();
   String selectedCategory = 'Makanan'; 
+  
   bool isEditMode = false;
   bool _isLoading = false;
 
-  // Variabel Penampung Gambar
-  Uint8List? _selectedImageBytes; // File gambar sementara dari Galeri
-  String? _currentImageUrl; // URL gambar jika mode edit
+  Uint8List? _selectedImageBytes;
+  String? _currentImageUrl;
   String? _imageExtension;
 
   @override
@@ -54,9 +60,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
     if (widget.product != null) {
       isEditMode = true;
       _nameController.text = widget.product!.title;
+      _descController.text = widget.product!.description;
       final cleanPrice = widget.product!.price.replaceAll(RegExp(r'[^0-9]'), '');
       _priceController.text = _formatInitialPrice(cleanPrice);
-      _currentImageUrl = widget.product!.imageUrl; // Muat URL gambar lama
+      _currentImageUrl = widget.product!.imageUrl;
       
       if (['Makanan', 'Minuman', 'Jasa', 'Lainnya'].contains(widget.product!.category)) {
         selectedCategory = widget.product!.category;
@@ -76,10 +83,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
     return formatted;
   }
 
-  // FUNGSI: Mengambil & Mengompres Gambar
   Future<void> _pickImage() async {
     final ImagePicker picker = ImagePicker();
-    // Kompresi: Kurangi resolusi dan kualitas jadi hemat kuota
     final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50, maxWidth: 800);
     
     if (image != null) {
@@ -87,12 +92,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
       setState(() {
         _selectedImageBytes = bytes;
         _imageExtension = image.path.split('.').last;
-        _currentImageUrl = null; // Hapus pratinjau URL lama
+        _currentImageUrl = null;
       });
     }
   }
 
-  // FUNGSI: Upload ke Supabase & Simpan Data
   Future<void> _saveProduct() async {
     if (_nameController.text.isEmpty || _priceController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nama dan Harga wajib diisi!')));
@@ -102,9 +106,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
     setState(() => _isLoading = true);
 
     try {
-      String? finalImageUrl = _currentImageUrl; // Gunakan URL lama jika tidak ada gambar baru
+      String? finalImageUrl = _currentImageUrl;
 
-      // Jika user memilih gambar baru dari galeri, upload dulu ke Storage!
       if (_selectedImageBytes != null) {
         final fileName = '${DateTime.now().millisecondsSinceEpoch}.$_imageExtension';
         
@@ -113,15 +116,15 @@ class _AddProductScreenState extends State<AddProductScreen> {
           _selectedImageBytes!,
           fileOptions: const FileOptions(upsert: true),
         );
-
         finalImageUrl = Supabase.instance.client.storage.from('products').getPublicUrl(fileName);
       }
 
       final provider = Provider.of<CatalogProvider>(context, listen: false);
+
       if (isEditMode) {
-        await provider.updateProduct(widget.product!.id, _nameController.text, _priceController.text, selectedCategory, imageUrl: finalImageUrl);
+        await provider.updateProduct(widget.product!.id, _nameController.text, _priceController.text, selectedCategory, _descController.text, imageUrl: finalImageUrl);
       } else {
-        await provider.addProduct(_nameController.text, _priceController.text, selectedCategory, imageUrl: finalImageUrl);
+        await provider.addProduct(_nameController.text, _priceController.text, selectedCategory, _descController.text, imageUrl: finalImageUrl);
       }
       
       if (mounted) {
@@ -139,6 +142,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   void dispose() {
     _nameController.dispose();
     _priceController.dispose();
+    _descController.dispose();
     super.dispose();
   }
 
@@ -163,7 +167,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   _buildSectionTitle('FOTO PRODUK'),
                   const SizedBox(height: 12),
                   
-                  // AREA KLIK GAMBAR
                   GestureDetector(
                     onTap: _pickImage,
                     child: Container(
@@ -172,7 +175,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
                         color: AppTheme.neonGreen.withOpacity(0.05), 
                         borderRadius: BorderRadius.circular(16), 
                         border: Border.all(color: AppTheme.neonGreen.withOpacity(0.4)),
-                        // Jika ada gambar dipilih, tampilkan
                         image: _selectedImageBytes != null 
                             ? DecorationImage(image: MemoryImage(_selectedImageBytes!), fit: BoxFit.cover)
                             : (_currentImageUrl != null 
@@ -188,7 +190,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                 const Text('Upload Foto Produk', style: TextStyle(color: AppTheme.neonGreen, fontSize: 12, fontWeight: FontWeight.bold)),
                               ],
                             )
-                          // Jika sudah ada gambar, beri indikator kecil di pojok
                           : Align(
                               alignment: Alignment.bottomRight,
                               child: Container(
@@ -200,14 +201,19 @@ class _AddProductScreenState extends State<AddProductScreen> {
                             ),
                     ),
                   ),
-
                   const SizedBox(height: 28),
+
                   _buildSectionTitle('INFORMASI PRODUK'),
                   const SizedBox(height: 12),
                   _buildInputField(controller: _nameController, hint: 'Nama Produk, cth: Nasi Liwet Spesial'),
                   const SizedBox(height: 16),
                   _buildInputField(controller: _priceController, hint: 'Harga (Rp), cth: 15.000', isNumber: true),
+                  const SizedBox(height: 16),
+                  
+                  _buildInputField(controller: _descController, hint: 'Deskripsi Produk (Bahan, detail, dll)...', maxLines: 4),
+                  
                   const SizedBox(height: 28),
+
                   _buildSectionTitle('KATEGORI'),
                   const SizedBox(height: 12),
                   SingleChildScrollView(
@@ -247,17 +253,36 @@ class _AddProductScreenState extends State<AddProductScreen> {
     return Text(title, style: const TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5));
   }
 
-  Widget _buildInputField({required TextEditingController controller, required String hint, bool isNumber = false}) {
+  Widget _buildInputField({required TextEditingController controller, required String hint, bool isNumber = false, int maxLines = 1}) {
     return Container(
-      decoration: BoxDecoration(color: Colors.white.withOpacity(0.045), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withOpacity(0.14))),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.045), 
+        borderRadius: BorderRadius.circular(12), 
+        border: Border.all(color: Colors.white.withOpacity(0.14))
+      ),
       child: TextField(
         controller: controller,
-        keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+        keyboardType: isNumber ? TextInputType.number : (maxLines > 1 ? TextInputType.multiline : TextInputType.text),
+        maxLines: maxLines,
         inputFormatters: isNumber ? [CurrencyInputFormatter()] : [],
         style: const TextStyle(color: AppTheme.textWhite, fontSize: 13),
         decoration: InputDecoration(
-          prefixIcon: isNumber ? const Padding(padding: EdgeInsets.only(left: 16, right: 8, top: 14), child: Text('Rp', style: TextStyle(color: AppTheme.neonGreen, fontWeight: FontWeight.bold, fontSize: 14))) : null,
-          hintText: hint, hintStyle: const TextStyle(color: Colors.white38, fontSize: 13), border: InputBorder.none, contentPadding: const EdgeInsets.all(16)
+          prefixIcon: isNumber 
+            ? const Padding(
+                padding: EdgeInsets.only(left: 16, right: 12),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Rp', style: TextStyle(color: AppTheme.neonGreen, fontWeight: FontWeight.bold, fontSize: 14)),
+                  ],
+                ),
+              ) 
+            : null,
+          hintText: hint, 
+          hintStyle: const TextStyle(color: Colors.white38, fontSize: 13), 
+          border: InputBorder.none, 
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16)
         ),
       ),
     );

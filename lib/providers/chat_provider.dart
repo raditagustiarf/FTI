@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class Message {
   final String id;
   final String senderId;
-  final String receiverId; // <-- PERBAIKAN: Menambahkan kolom penerima
+  final String receiverId;
   final String content;
   final DateTime createdAt;
 
@@ -14,7 +14,7 @@ class Message {
     return Message(
       id: json['id'].toString(),
       senderId: json['sender_id'].toString(),
-      receiverId: json['receiver_id'].toString(), // <-- PERBAIKAN: Merekam penerima
+      receiverId: json['receiver_id'].toString(),
       content: json['content'] ?? '',
       createdAt: DateTime.parse(json['created_at']),
     );
@@ -51,7 +51,6 @@ class ChatProvider with ChangeNotifier {
     try {
       debugPrint('Menarik pesan untuk: $myId dan $partnerId');
       
-      // PERBAIKAN: Tarik semua pesan kita, lalu saring di aplikasi agar tidak ada error sintaks database
       final response = await _supabase
           .from('messages')
           .select()
@@ -60,7 +59,6 @@ class ChatProvider with ChangeNotifier {
       
       final allMsgs = (response as List).map((e) => Message.fromJson(e)).toList();
       
-      // Saring hanya pesan antara kita dan si Penjual
       _messages = allMsgs.where((m) => 
         (m.senderId == myId && m.receiverId == partnerId) || 
         (m.senderId == partnerId && m.receiverId == myId)

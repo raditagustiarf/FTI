@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; 
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 String _formatRupiah(int number) {
   String result = number.toString();
@@ -19,35 +19,33 @@ String _formatRupiah(int number) {
 class Product {
   final String id;
   final String sellerId;
-  final String sellerName; 
-  // ==========================================
-  // BARU: Penampung Foto Profil Penjual
-  // ==========================================
-  final String? sellerAvatarUrl; 
-  
+  final String sellerName;
+  final String? sellerAvatarUrl;
   final String title;
   final String price;
   final String category;
-  final List<Color> gradientColors; 
-  final double? latitude;  
-  final double? longitude; 
-  final bool isStoreVisible; 
-  final String? imageUrl; 
+  final String description;
+  final List<Color> gradientColors;
+  final double? latitude;
+  final double? longitude;
+  final bool isStoreVisible;
+  final String? imageUrl;
   final double sellerRating;
   final int sellerReviewCount;
 
   Product({
     required this.id,
     required this.sellerId,
-    required this.sellerName, 
-    this.sellerAvatarUrl, // <-- Tambahkan ke constructor
+    required this.sellerName,
+    this.sellerAvatarUrl,
     required this.title,
     required this.price,
     required this.category,
+    required this.description,
     required this.gradientColors,
     this.latitude,
     this.longitude,
-    this.isStoreVisible = true, 
+    this.isStoreVisible = true,
     this.imageUrl,
     this.sellerRating = 0.0,
     this.sellerReviewCount = 0,
@@ -57,37 +55,33 @@ class Product {
     final profile = json['profiles'] ?? 
                     json['profiles!fk_seller_profile'] ?? 
                     json['profiles!products_seller_id_fkey'];
-    
+        
     return Product(
       id: json['id'].toString(),
       sellerId: json['seller_id'].toString(),
       sellerName: profile != null ? profile['full_name'] ?? 'Penjual' : 'Penjual',
-      
-      // Menarik data avatar penjual dari database
       sellerAvatarUrl: profile != null ? profile['avatar_url'] : null,
-
       latitude: profile != null ? profile['latitude']?.toDouble() : null,
       longitude: profile != null ? profile['longitude']?.toDouble() : null,
       isStoreVisible: profile != null ? (profile['is_store_visible'] ?? true) : true,
-      imageUrl: json['image_url'], 
+      imageUrl: json['image_url'],
       sellerRating: profile != null ? (profile['rating'] ?? 0.0).toDouble() : 0.0,
       sellerReviewCount: profile != null ? (profile['review_count'] ?? 0).toInt() : 0,
       title: json['title'] ?? 'Tanpa Nama',
       price: _formatRupiah(json['price'] as int),
       category: json['category'] ?? 'Lainnya',
-      gradientColors: const [Color(0xFF6D8D45), Color(0xFF20301D)], 
+      description: json['description'] ?? 'Tidak ada deskripsi.',
+      gradientColors: const [Color(0xFF6D8D45), Color(0xFF20301D)],
     );
   }
 }
 
 class CatalogProvider with ChangeNotifier {
   final _supabase = Supabase.instance.client;
-  
   List<Product> _products = [];
   bool _isLoading = false;
 
   List<Product> get products => _products.where((p) => p.isStoreVisible).toList();
-  
   List<Product> get myProducts {
     final user = _supabase.auth.currentUser;
     if (user == null) return [];
@@ -107,8 +101,7 @@ class CatalogProvider with ChangeNotifier {
     try {
       final response = await _supabase
           .from('products')
-          // PERBAIKAN: Tarik juga kolom 'avatar_url'
-          .select('*, profiles!fk_seller_profile(full_name, avatar_url, latitude, longitude, is_store_visible, rating, review_count)') 
+          .select('*, profiles!fk_seller_profile(full_name, avatar_url, latitude, longitude, is_store_visible, rating, review_count)')
           .order('created_at', ascending: false);
           
       _products = (response as List).map((data) => Product.fromJson(data)).toList();
@@ -116,7 +109,7 @@ class CatalogProvider with ChangeNotifier {
       try {
         final response = await _supabase
           .from('products')
-          .select('*, profiles!products_seller_id_fkey(full_name, avatar_url, latitude, longitude, is_store_visible, rating, review_count)') 
+          .select('*, profiles!products_seller_id_fkey(full_name, avatar_url, latitude, longitude, is_store_visible, rating, review_count)')
           .order('created_at', ascending: false);
           
         _products = (response as List).map((data) => Product.fromJson(data)).toList();
@@ -129,19 +122,20 @@ class CatalogProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addProduct(String title, String price, String category, {String? imageUrl}) async {
+  Future<void> addProduct(String title, String price, String category, String description, {String? imageUrl}) async {
     try {
       final user = _supabase.auth.currentUser;
-      if (user == null) return; 
-
+      if (user == null) return;
+      
       final numericPrice = price.replaceAll(RegExp(r'[^0-9]'), '');
-
+      
       await _supabase.from('products').insert({
         'title': title,
         'price': int.parse(numericPrice),
         'category': category,
-        'seller_id': user.id, 
-        if (imageUrl != null) 'image_url': imageUrl, 
+        'description': description,
+        'seller_id': user.id,
+        if (imageUrl != null) 'image_url': imageUrl,
       });
 
       await fetchProducts();
@@ -159,23 +153,24 @@ class CatalogProvider with ChangeNotifier {
     }
   }
 
-  Future<void> updateProduct(String id, String title, String price, String category, {String? imageUrl}) async {
+  Future<void> updateProduct(String id, String title, String price, String category, String description, {String? imageUrl}) async {
     try {
       final numericPrice = price.replaceAll(RegExp(r'[^0-9]'), '');
-
+      
       final updateData = {
         'title': title,
         'price': int.parse(numericPrice),
         'category': category,
+        'description': description,
       };
 
       if (imageUrl != null) {
-        updateData['image_url'] = imageUrl; 
+        updateData['image_url'] = imageUrl;
       }
 
       await _supabase.from('products').update(updateData).eq('id', id);
-
-      await fetchProducts(); 
+      await fetchProducts();
+      
     } catch (e) {
       debugPrint('Error edit produk: $e');
     }

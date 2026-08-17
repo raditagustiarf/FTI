@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; 
+import 'package:provider/provider.dart';
+
 import '../core/theme.dart';
 import 'add_product_screen.dart';
-import '../providers/catalog_provider.dart'; 
+import '../providers/catalog_provider.dart';
 
 class ManageCatalogScreen extends StatelessWidget {
   const ManageCatalogScreen({super.key});
@@ -69,7 +70,6 @@ class ManageCatalogScreen extends StatelessWidget {
               width: double.infinity,
               decoration: BoxDecoration(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
-                // PERBAIKAN: Menampilkan Foto Produk di Katalog Saya
                 image: product.imageUrl != null 
                     ? DecorationImage(image: NetworkImage(product.imageUrl!), fit: BoxFit.cover)
                     : null,
@@ -84,7 +84,7 @@ class ManageCatalogScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(product.title, style: const TextStyle(color: AppTheme.textWhite, fontSize: 11, fontWeight: FontWeight.bold)),
+                Text(product.title, style: const TextStyle(color: AppTheme.textWhite, fontSize: 11, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 4),
                 Text(product.price, style: const TextStyle(color: AppTheme.neonGreen, fontSize: 10, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
@@ -100,20 +100,55 @@ class ManageCatalogScreen extends StatelessWidget {
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 6),
-                          decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white.withOpacity(0.13))),
-                          child: const Center(child: Text('✏️ Edit', style: TextStyle(color: Colors.white70, fontSize: 10))),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(8), 
+                            border: Border.all(color: Colors.white.withOpacity(0.13))
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.edit_outlined, color: Colors.white70, size: 12),
+                              SizedBox(width: 4),
+                              Text('Edit', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w600)),
+                            ],
+                          )
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     GestureDetector(
-                      onTap: () {
-                        Provider.of<CatalogProvider>(context, listen: false).removeProduct(product.id);
+                      onTap: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            backgroundColor: AppTheme.glassBackground,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Colors.white12)),
+                            title: const Text('Hapus Produk?', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                            content: Text('Apakah kamu yakin ingin menghapus "${product.title}" dari katalog?', style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.5)),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal', style: TextStyle(color: Colors.white54))),
+                              ElevatedButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                                child: const Text('Hapus', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                        );
+                        
+                        if (confirm == true && context.mounted) {
+                          Provider.of<CatalogProvider>(context, listen: false).removeProduct(product.id);
+                        }
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white.withOpacity(0.13))),
-                        child: const Text('🗑️', style: TextStyle(color: Colors.white60, fontSize: 10)),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8), 
+                          border: Border.all(color: Colors.redAccent.withOpacity(0.3))
+                        ),
+                        child: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 14),
                       ),
                     ),
                   ],
@@ -134,9 +169,9 @@ class ManageCatalogScreen extends StatelessWidget {
         decoration: BoxDecoration(color: AppTheme.neonGreen.withOpacity(0.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: AppTheme.neonGreen.withOpacity(0.4))),
         child: const Column(
           children: [
-            Text('+', style: TextStyle(color: AppTheme.neonGreen, fontSize: 32, fontWeight: FontWeight.w300)),
+            Icon(Icons.add_circle_outline, color: AppTheme.neonGreen, size: 36),
             SizedBox(height: 8),
-            Text('Tambah Produk Baru', style: TextStyle(color: AppTheme.neonGreen, fontSize: 10, fontWeight: FontWeight.bold)),
+            Text('Tambah Produk Baru', style: TextStyle(color: AppTheme.neonGreen, fontSize: 11, fontWeight: FontWeight.bold)),
           ],
         ),
       ),

@@ -9,7 +9,6 @@ class NotificationProvider with ChangeNotifier {
   RealtimeChannel? _notifSubscription;
 
   List<Map<String, dynamic>> get notifications => _notifications;
-  // Menghitung jumlah notif yang is_read = false
   int get unreadCount => _notifications.where((n) => n['is_read'] == false).length;
 
   NotificationProvider() {
@@ -24,7 +23,7 @@ class NotificationProvider with ChangeNotifier {
           event: PostgresChangeEvent.insert,
           schema: 'public',
           table: 'notifications',
-          callback: (payload) => fetchNotifications(), // Tarik data ulang jika ada notif baru
+          callback: (payload) => fetchNotifications(), 
         )
         .subscribe();
   }
@@ -52,7 +51,6 @@ class NotificationProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Fungsi untuk menandai semua notifikasi menjadi "Sudah Dibaca"
   Future<void> markAllAsRead() async {
     final myId = _supabase.auth.currentUser?.id;
     if (myId == null || unreadCount == 0) return;
@@ -64,9 +62,19 @@ class NotificationProvider with ChangeNotifier {
           .eq('user_id', myId)
           .eq('is_read', false);
           
-      await fetchNotifications(); // Refresh list agar badge merah hilang
+      await fetchNotifications(); 
     } catch (e) {
       debugPrint('Error update is_read: $e');
+    }
+  }
+
+  Future<void> deleteNotification(String id) async {
+    try {
+      await _supabase.from('notifications').delete().eq('id', id);
+      _notifications.removeWhere((n) => n['id'] == id);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error hapus notifikasi: $e');
     }
   }
 

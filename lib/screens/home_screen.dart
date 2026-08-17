@@ -35,9 +35,6 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isGettingLocation = false;
   final MapController _mapController = MapController(); 
 
-  // ==========================================
-  // BARU: Mesin Pemantau Jarak Zoom Peta (Smart Zoom)
-  // ==========================================
   final ValueNotifier<double> _zoomNotifier = ValueNotifier<double>(15.5);
 
   @override
@@ -48,7 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    _zoomNotifier.dispose(); // Cegah kebocoran memori
+    _zoomNotifier.dispose();
     super.dispose();
   }
 
@@ -105,14 +102,23 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: AppTheme.darkBackground,
       body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 400),
-        switchInCurve: Curves.easeOutCubic, 
-        switchOutCurve: Curves.easeOutCubic,
+        duration: const Duration(milliseconds: 350),
+        switchInCurve: Curves.easeOutQuart, 
+        switchOutCurve: Curves.easeOutQuart,
+        layoutBuilder: (currentChild, previousChildren) {
+          return Stack(
+            alignment: Alignment.center,
+            children: <Widget>[
+              ...previousChildren,
+              if (currentChild != null) currentChild,
+            ],
+          );
+        },
         transitionBuilder: (child, animation) {
           return FadeTransition(
             opacity: animation,
-            child: SlideTransition(
-              position: Tween<Offset>(begin: const Offset(0.0, 0.05), end: Offset.zero).animate(animation),
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.98, end: 1.0).animate(animation),
               child: child,
             ),
           );
@@ -145,9 +151,6 @@ class _HomeScreenState extends State<HomeScreen> {
             initialCenter: mapCenter,
             initialZoom: 15.5, 
             maxZoom: 20.0,
-            // ==========================================
-            // BARU: Pantau pergerakan zoom secara realtime!
-            // ==========================================
             onPositionChanged: (position, hasGesture) {
               _zoomNotifier.value = position.zoom;
             },
@@ -155,12 +158,8 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             TileLayer(
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'com.tetanggamarket.app',
+              userAgentPackageName: 'com.lokit.app',
             ),
-            
-            // ==========================================
-            // SMART VISIBILITY MARKERS
-            // ==========================================
             MarkerLayer(
               markers: filteredMapProducts.asMap().entries.map((entry) {
                 final int index = entry.key;
@@ -174,13 +173,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   width: 140, 
                   height: 70, 
                   alignment: Alignment.bottomCenter, 
-                  // ValueListenableBuilder agar UI berubah TANPA lag (sangat ringan)
                   child: ValueListenableBuilder<double>(
                     valueListenable: _zoomNotifier,
                     builder: (context, currentZoom, child) {
-                      
-                      // LOGIKA: Jika dilihat dari jauh (Zoom < 14)
-                      if (currentZoom < 14.0) {
+                      if (currentZoom < 10.0) {
+                        return const SizedBox.shrink();
+                      } 
+                      else if (currentZoom < 14.0) {
                         return Center(
                           child: Container(
                             width: 14, height: 14,
@@ -195,7 +194,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         );
                       } 
-                      // LOGIKA: Jika dilihat dari dekat (Zoom >= 14)
                       else {
                         return _StoreCategoryPin(
                           product: product,
@@ -334,10 +332,16 @@ class _HomeScreenState extends State<HomeScreen> {
         final result = await Navigator.push(
           context,
           PageRouteBuilder(
-            transitionDuration: const Duration(milliseconds: 500), reverseTransitionDuration: const Duration(milliseconds: 400),
+            transitionDuration: const Duration(milliseconds: 400), reverseTransitionDuration: const Duration(milliseconds: 300),
             pageBuilder: (context, animation, secondaryAnimation) => const SearchScreen(),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(opacity: CurveTween(curve: Curves.easeInOut).animate(animation), child: child);
+              return FadeTransition(
+                opacity: animation, 
+                child: SlideTransition(
+                  position: Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+                  child: child,
+                )
+              );
             },
           ),
         );
@@ -422,7 +426,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final isActive = activeCategory == label; 
     return GestureDetector(
       onTap: () => setState(() => activeCategory = label),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         margin: const EdgeInsets.only(right: 8), padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(color: isActive ? AppTheme.neonGreen.withOpacity(0.06) : Colors.white.withOpacity(0.035), borderRadius: BorderRadius.circular(20), border: Border.all(color: isActive ? AppTheme.neonGreen : Colors.white.withOpacity(0.14))),
         child: Text(label, style: TextStyle(color: isActive ? AppTheme.neonGreen : Colors.white60, fontSize: 11, fontWeight: FontWeight.w500)),
@@ -760,7 +765,12 @@ class ProductDetailBottomSheet extends StatelessWidget {
                   Text(product.category.toUpperCase(), style: const TextStyle(color: AppTheme.neonGreen, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5)), const SizedBox(height: 8),
                   Text(product.title, style: const TextStyle(color: AppTheme.textWhite, fontSize: 28, fontWeight: FontWeight.bold, height: 1.2, letterSpacing: -1.0)), const SizedBox(height: 12),
                   Text(product.price, style: const TextStyle(color: AppTheme.neonGreen, fontSize: 20, fontWeight: FontWeight.bold)), const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Divider(color: Colors.white12)),
-                  const Text('Dibuat segar setiap hari dengan bahan-bahan pilihan terbaik dari tetangga sekitar, disajikan khusus untuk Anda.', style: TextStyle(color: AppTheme.textGray, fontSize: 13, height: 1.6)), const SizedBox(height: 20),
+                  Text(
+                    product.description.isNotEmpty ? product.description : 'Tidak ada deskripsi produk.', 
+                    style: const TextStyle(color: AppTheme.textGray, fontSize: 13, height: 1.6)
+                  ), 
+                  
+                  const SizedBox(height: 20),
                   Row(children: [
                     Container(
                       width: 32, height: 32, 

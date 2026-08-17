@@ -5,7 +5,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/theme.dart';
 import 'screens/splash_screen.dart';
 
-// Mendaftarkan semua "Otak" (Provider) aplikasi
 import 'providers/catalog_provider.dart';
 import 'providers/chat_provider.dart';
 import 'providers/review_provider.dart';
@@ -25,7 +24,7 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => CatalogProvider()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => ReviewProvider()),
-        ChangeNotifierProvider(create: (_) => NotificationProvider()), // <-- Mesin Notifikasi
+        ChangeNotifierProvider(create: (_) => NotificationProvider()),
       ],
       child: const NeighborhoodApp(),
     ),
@@ -38,7 +37,7 @@ class NeighborhoodApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Tetangga Market',
+      title: 'LOKIT',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
       home: const SplashScreen(),
